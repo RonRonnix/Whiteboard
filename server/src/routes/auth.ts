@@ -1,19 +1,21 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
 import config from '../config'
 import { requireAuth, type AuthRequest } from '../middleware/auth'
-import crypto from 'crypto'
 
 const router = Router()
+
+const VERIFICATION_TTL_MINUTES = 30
+const RESEND_COOLDOWN_MS = 60 * 1000
 
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   displayName: z.string().min(2).max(50),
-  inviteCode: z.string().min(8),
 })
 
 const loginSchema = z.object({
@@ -21,9 +23,13 @@ const loginSchema = z.object({
   password: z.string().min(1),
 })
 
-const inviteSchema = z.object({
+const verifySchema = z.object({
   email: z.string().email(),
-  expiresInDays: z.number().int().min(1).max(30).optional(),
+  code: z.string().min(4).max(8),
+})
+
+const resendSchema = z.object({
+  email: z.string().email(),
 })
 
 function normalizeEmail(email: string) {
@@ -34,36 +40,41 @@ function createToken(userId: string) {
   return jwt.sign({ sub: userId }, config.jwtSecret, { expiresIn: '1d' })
 }
 
-function maskUser(user: { id: string; email: string; displayName: string }) {
+function maskUser(user: { id: string; email: string; displayName: string; status: string; emailVerifiedAt: Date | null }) {
   return {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    status: user.status,
+    emailVerifiedAt: user.emailVerifiedAt,
   }
+}
+
+function generateCode() {
+  return crypto.randomInt(0, 1_000_000).toString().padStart(6, '0')
+}
+
+async function issueVerificationToken(userId: string) {
+  const token = generateCode()
+  const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MINUTES * 60 * 1000)
+
+  return prisma.emailVerification.create({
+    data: {
+      userId,
+      token,
+      expiresAt,
+    },
+  })
+}
+
+async function sendVerificationEmail(email: string, token: string) {
+  console.info(`[auth] Verification code for ${email}: ${token}`)
 }
 
 router.post('/register', async (req, res, next) => {
   try {
     const data = registerSchema.parse(req.body)
     const normalizedEmail = normalizeEmail(data.email)
-    const inviteCode = data.inviteCode.trim().toUpperCase()
-
-    const invite = await prisma.inviteToken.findUnique({ where: { token: inviteCode } })
-    if (!invite) {
-      return res.status(403).json({ message: 'Invalid invite code' })
-    }
-
-    if (invite.usedAt) {
-      return res.status(403).json({ message: 'Invite has already been used' })
-    }
-
-    if (invite.expiresAt < new Date()) {
-      return res.status(403).json({ message: 'Invite has expired' })
-    }
-
-    if (normalizeEmail(invite.email) !== normalizeEmail(data.email)) {
-      return res.status(403).json({ message: 'Invite email mismatch' })
-    }
 
     const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } })
     if (existingUser) {
@@ -71,29 +82,22 @@ router.post('/register', async (req, res, next) => {
     }
 
     const passwordHash = await bcrypt.hash(data.password, 10)
-
-    const user = await prisma.$transaction(async (tx) => {
-      const createdUser = await tx.user.create({
-        data: {
-          email: normalizedEmail,
-          passwordHash,
-          displayName: data.displayName,
-        },
-      })
-
-      await tx.inviteToken.update({
-        where: { id: invite.id },
-        data: { usedAt: new Date() },
-      })
-
-      return createdUser
+    const user = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        passwordHash,
+        displayName: data.displayName,
+        status: 'pending',
+      },
     })
 
-    const token = createToken(user.id)
+    const verification = await issueVerificationToken(user.id)
+    await sendVerificationEmail(user.email, verification.token)
 
     return res.status(201).json({
-      token,
-      user: maskUser(user),
+      requiresVerification: true,
+      email: user.email,
+      message: 'Verification code sent. Please check your inbox.',
     })
   } catch (error) {
     next(error)
@@ -115,6 +119,10 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid email or password' })
     }
 
+    if (user.status !== 'active') {
+      return res.status(403).json({ message: 'Please verify your email before signing in.' })
+    }
+
     const token = createToken(user.id)
 
     return res.json({
@@ -126,36 +134,92 @@ router.post('/login', async (req, res, next) => {
   }
 })
 
-router.post('/invite', requireAuth, async (req: AuthRequest, res, next) => {
+router.post('/verify', async (req, res, next) => {
   try {
-    const data = inviteSchema.parse(req.body)
-    const expiresAt = new Date()
-    const expiresInDays = data.expiresInDays ?? 7
-    expiresAt.setDate(expiresAt.getDate() + expiresInDays)
+    const data = verifySchema.parse(req.body)
+    const normalizedEmail = normalizeEmail(data.email)
+    const code = data.code.trim()
 
-    const token = crypto.randomBytes(4).toString('hex').toUpperCase()
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found.' })
+    }
 
-    const invite = await prisma.inviteToken.create({
-      data: {
-        email: normalizeEmail(data.email),
-        token,
-        expiresAt,
-        issuedById: req.userId!,
+    if (user.status === 'active') {
+      const token = createToken(user.id)
+      return res.json({ token, user: maskUser(user) })
+    }
+
+    const verification = await prisma.emailVerification.findFirst({
+      where: {
+        userId: user.id,
+        token: code,
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
       },
-      select: {
-        id: true,
-        email: true,
-        token: true,
-        expiresAt: true,
-        issuedAt: true,
-      },
+      orderBy: { createdAt: 'desc' },
     })
 
-    return res.status(201).json({ invite })
+    if (!verification) {
+      return res.status(400).json({ message: 'Invalid or expired code.' })
+    }
+
+    const now = new Date()
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      await tx.emailVerification.update({
+        where: { id: verification.id },
+        data: { consumedAt: now },
+      })
+
+      return tx.user.update({
+        where: { id: user.id },
+        data: { status: 'active', emailVerifiedAt: now },
+      })
+    })
+
+    const token = createToken(updatedUser.id)
+
+    return res.json({
+      token,
+      user: maskUser(updatedUser),
+    })
   } catch (error) {
     next(error)
   }
 })
+
+router.post('/resend-code', async (req, res, next) => {
+  try {
+    const data = resendSchema.parse(req.body)
+    const normalizedEmail = normalizeEmail(data.email)
+
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found.' })
+    }
+
+    if (user.status === 'active') {
+      return res.status(400).json({ message: 'Account already verified.' })
+    }
+
+    const latest = await prisma.emailVerification.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (latest && Date.now() - latest.createdAt.getTime() < RESEND_COOLDOWN_MS) {
+      return res.status(429).json({ message: 'Please wait before requesting another code.' })
+    }
+
+    const verification = await issueVerificationToken(user.id)
+    await sendVerificationEmail(user.email, verification.token)
+
+    return res.json({ message: 'Verification code resent.' })
+  } catch (error) {
+    next(error)
+  }
+})
+
 
 router.get('/me', requireAuth, async (req: AuthRequest, res, next) => {
   try {

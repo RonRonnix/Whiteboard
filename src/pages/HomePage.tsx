@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { createSessionRoom, fetchSessionRooms } from '../lib/api'
+import { Link, useNavigate } from 'react-router-dom'
+import { createSessionRoom, fetchSessionRooms, joinSessionRoom } from '../lib/api'
 import type { SessionRoom } from '../types'
 import { useAuthStore, type AuthState } from '../store/authStore'
 
 export default function HomePage() {
+  const navigate = useNavigate()
   const user = useAuthStore((state: AuthState) => state.user)
   const logout = useAuthStore((state: AuthState) => state.logout)
   const [rooms, setRooms] = useState<SessionRoom[]>([])
@@ -13,6 +14,8 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [creating, setCreating] = useState(false)
+  const [joinCode, setJoinCode] = useState('')
+  const [joining, setJoining] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -59,6 +62,25 @@ export default function HomePage() {
     }
   }
 
+  const handleJoinRoom = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const trimmed = joinCode.trim().toUpperCase()
+    if (!trimmed) return
+
+    setJoining(true)
+    setError(null)
+
+    try {
+      const { room } = await joinSessionRoom({ inviteCode: trimmed })
+      setJoinCode('')
+      navigate(`/rooms/${room.id}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to join room')
+    } finally {
+      setJoining(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <header className="border-b border-slate-900/70 bg-slate-950/70 px-6 py-4 backdrop-blur">
@@ -82,28 +104,54 @@ export default function HomePage() {
 
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10">
         <section className="rounded-2xl border border-slate-900/60 bg-slate-900/60 p-6 shadow-lg shadow-black/40">
-          <h2 className="text-lg font-semibold text-white">Create a session room</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Spin up a private whiteboard room and invite teammates with the generated session code.
-          </p>
-          <form className="mt-5 flex flex-col gap-4 md:flex-row" onSubmit={handleCreateRoom}>
-            <input
-              type="text"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Sprint planning with Design"
-              className="flex-1 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-base text-white outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
-              required
-              minLength={3}
-            />
-            <button
-              type="submit"
-              disabled={creating}
-              className="rounded-xl bg-indigo-500/90 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {creating ? 'Creating…' : 'Create room'}
-            </button>
-          </form>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Create a session room</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Spin up a private whiteboard room and share the invite code.
+              </p>
+              <form className="mt-5 flex flex-col gap-4" onSubmit={handleCreateRoom}>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="Sprint planning with Design"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-base text-white outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
+                  required
+                  minLength={3}
+                />
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="rounded-xl bg-indigo-500/90 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {creating ? 'Creating…' : 'Create room'}
+                </button>
+              </form>
+            </div>
+            <div className="rounded-2xl border border-dashed border-slate-800/80 bg-slate-950/40 p-5">
+              <h2 className="text-lg font-semibold text-white">Join by invite code</h2>
+              <p className="mt-1 text-sm text-slate-400">Enter the 8-character code you received to hop into an existing room.</p>
+              <form className="mt-5 flex flex-col gap-4" onSubmit={handleJoinRoom}>
+                <input
+                  type="text"
+                  value={joinCode}
+                  onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+                  placeholder="e.g. 1A2B3C4D"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-base tracking-[0.3em] text-white outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="submit"
+                  disabled={joining}
+                  className="rounded-xl border border-indigo-500/80 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-indigo-200 transition hover:border-indigo-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {joining ? 'Joining…' : 'Join room'}
+                </button>
+              </form>
+            </div>
+          </div>
         </section>
 
         <section className="rounded-2xl border border-slate-900/60 bg-slate-900/40 p-6 shadow-inner shadow-black/30">

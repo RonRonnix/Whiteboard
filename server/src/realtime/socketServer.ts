@@ -10,11 +10,14 @@ import type {
   ParticipantPresence,
   ServerToClientEvents,
   SocketData,
+  WhiteboardStroke,
 } from './types'
 
 const roomParticipants = new Map<string, Map<string, ParticipantPresence>>()
 const roomChatHistory = new Map<string, ChatMessage[]>()
+const roomWhiteboardStrokes = new Map<string, WhiteboardStroke[]>()
 const MAX_CHAT_HISTORY = 50
+const MAX_WHITEBOARD_STROKES = 1000
 
 function getParticipants(roomId: string) {
   if (!roomParticipants.has(roomId)) {
@@ -45,7 +48,27 @@ function removeParticipant(roomId: string, userId: string) {
   if (participants.size === 0) {
     roomParticipants.delete(roomId)
     roomChatHistory.delete(roomId)
+    roomWhiteboardStrokes.delete(roomId)
   }
+}
+
+function getWhiteboardStrokes(roomId: string) {
+  if (!roomWhiteboardStrokes.has(roomId)) {
+    roomWhiteboardStrokes.set(roomId, [])
+  }
+  return roomWhiteboardStrokes.get(roomId)!
+}
+
+function pushWhiteboardStroke(roomId: string, stroke: WhiteboardStroke) {
+  const strokes = getWhiteboardStrokes(roomId)
+  strokes.push(stroke)
+  if (strokes.length > MAX_WHITEBOARD_STROKES) {
+    strokes.shift()
+  }
+}
+
+function clearWhiteboard(roomId: string) {
+  roomWhiteboardStrokes.set(roomId, [])
 }
 
 type TokenPayload = {
@@ -117,6 +140,7 @@ export function createSocketServer(httpServer: HttpServer) {
           roomId,
           participants: Array.from(participants.values()),
           chatHistory: getChatHistory(roomId),
+          whiteboardStrokes: getWhiteboardStrokes(roomId),
         })
 
         socket.to(roomId).emit('session:participant:joined', { roomId, participant: presence })
@@ -157,6 +181,42 @@ export function createSocketServer(httpServer: HttpServer) {
       }
       pushChatMessage(roomId, message)
       io.to(roomId).emit('chat:message', message)
+    })
+
+    socket.on('whiteboard:stroke', ({ roomId, stroke }) => {
+      if (!stroke.points || stroke.points.length < 2) {
+        return
+      }
+      const presence = roomParticipants.get(roomId)?.get(user.id)
+      if (!presence) {
+        return
+      }
+
+      const fullStroke: WhiteboardStroke = {
+        id: crypto.randomUUID(),
+        clientId: stroke.clientId,
+        roomId,
+        userId: user.id,
+        displayName: user.displayName,
+        color: stroke.color,
+        size: stroke.size,
+        tool: stroke.tool,
+        points: stroke.points,
+        timestamp: new Date().toISOString(),
+      }
+
+      pushWhiteboardStroke(roomId, fullStroke)
+      io.to(roomId).emit('whiteboard:stroke', { roomId, stroke: fullStroke })
+    })
+
+    socket.on('whiteboard:clear', ({ roomId }) => {
+      const presence = roomParticipants.get(roomId)?.get(user.id)
+      if (!presence) {
+        return
+      }
+
+      clearWhiteboard(roomId)
+      io.to(roomId).emit('whiteboard:clear', { roomId, clearedBy: user.id })
     })
 
     socket.on('disconnect', () => {

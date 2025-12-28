@@ -7,15 +7,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserStatus {
+  pending
+  active
+}
+
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  passwordHash String
-  displayName  String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  rooms        SessionRoom[]
-  invites      InviteToken[]
+  id              String              @id @default(cuid())
+  email           String              @unique
+  passwordHash    String
+  displayName     String
+  status          UserStatus          @default(pending)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  rooms           SessionRoom[]
+  verifications   EmailVerification[]
 }
 
 model SessionRoom {
@@ -30,16 +37,15 @@ model SessionRoom {
   @@index([createdById])
 }
 
-model InviteToken {
-  id          String   @id @default(cuid())
-  token       String   @unique
-  email       String
-  expiresAt   DateTime
-  usedAt      DateTime?
-  issuedAt    DateTime @default(now())
-  issuedById  String
+model EmailVerification {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  userId     String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
 
-  issuedBy User @relation(fields: [issuedById], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([email])
+  @@index([userId])
 }
