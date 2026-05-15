@@ -236,12 +236,6 @@ export default function LoginPage() {
                   Start over
                 </button>
               </p>
-              <p>
-                Already verified?{' '}
-                <button type="button" onClick={switchToLogin} className="font-semibold text-indigo-300 hover:text-indigo-200">
-                  Return to sign in
-                </button>
-              </p>
             </div>
           )}
           <p className="pt-4 text-xs text-slate-500">
