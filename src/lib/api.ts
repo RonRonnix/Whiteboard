@@ -31,7 +31,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     headers,
   })
 
-  if (response.status === 401) {
+  if (response.status === 401 && token) {
     clearAuthState()
     throw new Error('Your session expired. Please sign in again.')
   }

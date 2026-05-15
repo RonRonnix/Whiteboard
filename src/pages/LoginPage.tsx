@@ -201,7 +201,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={status === 'loading'}
-            className="flex w-full items-center justify-center rounded-xl bg-indigo-500/90 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center rounded-xl bg-indigo-500/90 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition cursor-pointer hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {status === 'loading'
               ? 'Please wait…'
@@ -217,14 +217,14 @@ export default function LoginPage() {
           {view === 'login' ? (
             <p>
               Need an account?{' '}
-              <button type="button" onClick={switchToRegister} className="font-semibold text-indigo-300 hover:text-indigo-200">
+              <button type="button" onClick={switchToRegister} className="font-semibold text-indigo-300 hover:text-indigo-200 cursor-pointer">
                 Create one now
               </button>
             </p>
           ) : view === 'register' ? (
             <p>
               Already a member?{' '}
-              <button type="button" onClick={switchToLogin} className="font-semibold text-indigo-300 hover:text-indigo-200">
+              <button type="button" onClick={switchToLogin} className="font-semibold text-indigo-300 hover:text-indigo-200 cursor-pointer">
                 Return to sign in
               </button>
             </p>

@@ -94,7 +94,7 @@ export default function HomePage() {
             <p>{user?.email}</p>
             <button
               onClick={logout}
-              className="mt-2 text-xs font-semibold uppercase tracking-wide text-indigo-300 hover:text-indigo-200"
+              className="mt-2 text-xs font-semibold uppercase tracking-wide text-indigo-300 hover:text-indigo-200 cursor-pointer"
             >
               Sign out
             </button>
@@ -123,7 +123,7 @@ export default function HomePage() {
                 <button
                   type="submit"
                   disabled={creating}
-                  className="rounded-xl bg-indigo-500/90 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-xl bg-indigo-500/90 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed cursor-pointer disabled:opacity-60"
                 >
                   {creating ? 'Creating…' : 'Create room'}
                 </button>
@@ -145,7 +145,7 @@ export default function HomePage() {
                 <button
                   type="submit"
                   disabled={joining}
-                  className="rounded-xl border border-indigo-500/80 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-indigo-200 transition hover:border-indigo-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-xl border border-indigo-500/80 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-indigo-200 transition hover:border-indigo-400 hover:text-white disabled:cursor-not-allowed cursor-pointer disabled:opacity-60"
                 >
                   {joining ? 'Joining…' : 'Join room'}
                 </button>
