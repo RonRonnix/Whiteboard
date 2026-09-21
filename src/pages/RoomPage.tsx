@@ -31,6 +31,7 @@ export default function RoomPage() {
   const [roomInfo, setRoomInfo] = useState<SessionRoom | null>(null)
   const [roomInfoError, setRoomInfoError] = useState<string | null>(null)
   const [strokes, setStrokes] = useState<WhiteboardStroke[]>([])
+  const [undoState, setUndoState] = useState({ canUndo: false, canRedo: false })
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const [copiedCode, setCopiedCode] = useState(false)
@@ -139,9 +140,14 @@ export default function RoomPage() {
       })
     })
 
-    socket.on('whiteboard:clear', ({ roomId: clearedRoomId }) => {
-      if (clearedRoomId !== roomId) return
-      setStrokes([])
+    socket.on('whiteboard:stroke:removed', ({ roomId: incomingRoomId, strokeId }) => {
+      if (incomingRoomId !== roomId) return
+      setStrokes((previous) => previous.filter((stroke) => stroke.id !== strokeId))
+    })
+
+    socket.on('whiteboard:undo-state', ({ roomId: incomingRoomId, canUndo, canRedo }) => {
+      if (incomingRoomId !== roomId) return
+      setUndoState({ canUndo, canRedo })
     })
 
     socket.on('session:error', ({ message }) => {
@@ -187,11 +193,33 @@ export default function RoomPage() {
     socketRef.current.emit('whiteboard:stroke', { roomId, stroke: clonedStroke })
   }
 
-  const handleClearBoard = () => {
-    if (!roomId || !socketRef.current || !isOwner) return
-    setStrokes([])
-    socketRef.current.emit('whiteboard:clear', { roomId })
-  }
+  const handleUndo = useCallback(() => {
+    if (!roomId || !socketRef.current || !canDraw || !undoState.canUndo) return
+    socketRef.current.emit('whiteboard:undo', { roomId })
+  }, [roomId, canDraw, undoState.canUndo])
+
+  const handleRedo = useCallback(() => {
+    if (!roomId || !socketRef.current || !canDraw || !undoState.canRedo) return
+    socketRef.current.emit('whiteboard:redo', { roomId })
+  }, [roomId, canDraw, undoState.canRedo])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (!(event.ctrlKey || event.metaKey)) return
+      if (event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) handleRedo()
+        else handleUndo()
+      } else if (event.key.toLowerCase() === 'y') {
+        event.preventDefault()
+        handleRedo()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleUndo, handleRedo])
 
   const handleRoleChange = async (member: RoomMember, role: Exclude<RoomRole, 'owner'>) => {
     if (!roomId || member.role === role) return
@@ -335,6 +363,14 @@ export default function RoomPage() {
               <h2 className="text-2xl font-semibold text-white">Sketch ideas together</h2>
               <p className="text-sm text-slate-500">{strokes.length} live strokes</p>
             </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={handleUndo} disabled={!canDraw || !undoState.canUndo} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 hover:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">
+                Undo
+              </button>
+              <button type="button" onClick={handleRedo} disabled={!canDraw || !undoState.canRedo} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 hover:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">
+                Redo
+              </button>
+            </div>
             <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-800/70 bg-slate-950/60 px-4 py-3">
               <div>
                 <p className="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Invite code</p>
@@ -367,9 +403,7 @@ export default function RoomPage() {
                 className="flex-1"
                 strokes={strokes}
                 onStrokeComplete={handleStrokeComplete}
-                onClearBoard={handleClearBoard}
                 disabled={status !== 'connected' || !canDraw}
-                canClear={isOwner}
               />
             </div>
             <div className="rounded-2xl border border-slate-900/60 bg-slate-950/40 lg:w-80 xl:w-96">

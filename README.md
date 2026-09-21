@@ -40,15 +40,19 @@ The client runs at `http://localhost:5173`; the API runs at `http://localhost:40
 
 Each room membership has one of these roles:
 
-- **Owner** — manages member roles and invite settings; can draw and clear the board.
+- **Owner** — manages member roles and invite settings; can draw and chat.
 - **Editor** — can draw and chat.
-- **Viewer** — can view, move their cursor, and chat, but cannot draw or clear the board.
+- **Viewer** — can view, move their cursor, and chat, but cannot alter the board.
 
 Joining with an active invite always grants the **viewer** role. The owner can promote or demote members using the room’s member list. Permissions are checked on the server for every protected Socket.IO action.
 
 ## Invite controls
 
 The owner can set a 24-hour expiry, remove expiry, revoke the current code, or rotate it. Revoking/rotating blocks new joins using the old code; it never removes existing members.
+
+## Board tools
+
+Editors and owners can choose a pen or eraser and adjust its size. Erasing is recorded as a board operation, so it remains synchronized for everyone in the room. Each collaborator can undo and redo their own drawing operations using the toolbar or `Ctrl/Cmd+Z`, `Ctrl+Y`, and `Ctrl/Cmd+Shift+Z`.
 
 ## Checks
 

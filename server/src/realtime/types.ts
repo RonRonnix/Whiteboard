@@ -22,7 +22,7 @@ export type NewStroke = {
   points: Point[]
   color: string
   size: number
-  tool?: string
+  tool?: 'pen' | 'eraser'
 }
 
 export type WhiteboardStroke = {
@@ -33,7 +33,7 @@ export type WhiteboardStroke = {
   displayName: string
   color: string
   size: number
-  tool?: string
+  tool?: 'pen' | 'eraser'
   points: Point[]
   timestamp: string
 }
@@ -53,7 +53,8 @@ export type ClientToServerEvents = {
   'session:cursor': (payload: { roomId: string; cursor: CursorState }) => void
   'chat:message': (payload: { roomId: string; content: string }) => void
   'whiteboard:stroke': (payload: { roomId: string; stroke: NewStroke }) => void
-  'whiteboard:clear': (payload: { roomId: string }) => void
+  'whiteboard:undo': (payload: { roomId: string }) => void
+  'whiteboard:redo': (payload: { roomId: string }) => void
 }
 
 export type ServerToClientEvents = {
@@ -69,7 +70,8 @@ export type ServerToClientEvents = {
   'session:cursor': (payload: { roomId: string; userId: string; cursor: CursorState }) => void
   'chat:message': (message: ChatMessage) => void
   'whiteboard:stroke': (payload: { roomId: string; stroke: WhiteboardStroke }) => void
-  'whiteboard:clear': (payload: { roomId: string; clearedBy: string }) => void
+  'whiteboard:stroke:removed': (payload: { roomId: string; strokeId: string }) => void
+  'whiteboard:undo-state': (payload: { roomId: string; canUndo: boolean; canRedo: boolean }) => void
   'session:error': (payload: { roomId?: string; message: string }) => void
 }
 

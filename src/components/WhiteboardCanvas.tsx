@@ -10,8 +10,10 @@ function createClientId() {
   return Math.random().toString(36).slice(2, 10)
 }
 
-function drawStroke(ctx: CanvasRenderingContext2D, stroke: { points: Point[]; color: string; size: number }) {
+function drawStroke(ctx: CanvasRenderingContext2D, stroke: { points: Point[]; color: string; size: number; tool?: 'pen' | 'eraser' }) {
   if (stroke.points.length < 2) return
+  ctx.save()
+  ctx.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
   ctx.strokeStyle = stroke.color
   ctx.lineWidth = stroke.size
   ctx.lineJoin = 'round'
@@ -22,22 +24,22 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: { points: Point[]; co
     ctx.lineTo(stroke.points[i].x, stroke.points[i].y)
   }
   ctx.stroke()
+  ctx.restore()
 }
 
 type WhiteboardCanvasProps = {
   strokes: WhiteboardStroke[]
   onStrokeComplete: (stroke: NewStroke) => void
-  onClearBoard: () => void
   disabled?: boolean
-  canClear?: boolean
   className?: string
 }
 
-export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoard, disabled = false, canClear = !disabled, className }: WhiteboardCanvasProps) {
+export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled = false, className }: WhiteboardCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
   const [color, setColor] = useState(COLORS[0])
   const [brushSize, setBrushSize] = useState(4)
+  const [tool, setTool] = useState<'pen' | 'eraser'>('pen')
   const drawingRef = useRef(false)
   const liveStrokeRef = useRef<NewStroke | null>(null)
   const devicePixelRatioRef = useRef(1)
@@ -113,7 +115,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoa
       points: [point],
       color,
       size: brushSize,
-      tool: 'pen',
+      tool,
     }
   }
 
@@ -146,17 +148,18 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoa
     commitStroke()
   }
 
-  const handleClear = () => {
-    if (!canClear) return
-    liveStrokeRef.current = null
-    drawingRef.current = false
-    onClearBoard()
-  }
-
   return (
     <div className={`relative flex h-[500px] flex-col rounded-2xl border border-slate-900/60 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 shadow-inner shadow-black/40 ${className ?? ''}`}>
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-800/70 px-4 py-3">
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setTool('pen')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'pen' ? 'border-indigo-400 bg-indigo-500/20 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}>
+            Pen
+          </button>
+          <button type="button" onClick={() => setTool('eraser')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'eraser' ? 'border-indigo-400 bg-indigo-500/20 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}>
+            Eraser
+          </button>
+        </div>
+        {tool === 'pen' && <div className="flex items-center gap-2">
           {COLORS.map((swatch) => (
             <button
               key={swatch}
@@ -166,28 +169,19 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoa
               style={{ backgroundColor: swatch }}
             />
           ))}
-        </div>
+        </div>}
         <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-400">
-          <span>Brush</span>
+          <span>{tool === 'eraser' ? 'Eraser' : 'Brush'}</span>
           <input
             type="range"
             min={2}
-            max={16}
+            max={48}
             step={1}
             value={brushSize}
             onChange={(event) => setBrushSize(Number(event.target.value))}
             className="w-32 accent-indigo-400"
           />
-        </div>
-        <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
-          <button
-            type="button"
-            onClick={handleClear}
-            disabled={!canClear}
-            className="rounded-xl border border-rose-500/60 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Clear board
-          </button>
+          <span className="w-5 text-right tabular-nums">{brushSize}</span>
         </div>
       </div>
       <canvas

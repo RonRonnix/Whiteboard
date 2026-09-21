@@ -18,6 +18,8 @@ import type {
 const roomParticipants = new Map<string, Map<string, ParticipantPresence>>()
 const roomChatHistory = new Map<string, ChatMessage[]>()
 const roomWhiteboardStrokes = new Map<string, WhiteboardStroke[]>()
+type RedoEntry = { stroke: WhiteboardStroke; index: number }
+const roomRedoStrokes = new Map<string, Map<string, RedoEntry[]>>()
 const MAX_CHAT_HISTORY = 50
 const MAX_WHITEBOARD_STROKES = 1000
 const roomIdSchema = z.string().min(1).max(100)
@@ -34,7 +36,7 @@ const strokeSchema = z.object({
     points: z.array(z.object({ x: z.number().finite(), y: z.number().finite() })).min(2).max(10000),
     color: z.string().regex(/^#[0-9a-f]{6}$/i),
     size: z.number().finite().min(1).max(64),
-    tool: z.string().max(30).optional(),
+    tool: z.enum(['pen', 'eraser']).default('pen'),
   }),
 })
 
@@ -76,6 +78,7 @@ function removeParticipant(roomId: string, userId: string) {
     roomParticipants.delete(roomId)
     roomChatHistory.delete(roomId)
     roomWhiteboardStrokes.delete(roomId)
+    roomRedoStrokes.delete(roomId)
   }
 }
 
@@ -94,8 +97,11 @@ function pushWhiteboardStroke(roomId: string, stroke: WhiteboardStroke) {
   }
 }
 
-function clearWhiteboard(roomId: string) {
-  roomWhiteboardStrokes.set(roomId, [])
+function getRedoStrokes(roomId: string, userId: string) {
+  if (!roomRedoStrokes.has(roomId)) roomRedoStrokes.set(roomId, new Map())
+  const redosByUser = roomRedoStrokes.get(roomId)!
+  if (!redosByUser.has(userId)) redosByUser.set(userId, [])
+  return redosByUser.get(userId)!
 }
 
 async function getRoomRole(roomId: string, userId: string) {
@@ -181,6 +187,12 @@ export function createSocketServer(httpServer: HttpServer) {
           chatHistory: getChatHistory(validRoomId),
           whiteboardStrokes: getWhiteboardStrokes(validRoomId),
         })
+        const hasOwnStroke = getWhiteboardStrokes(validRoomId).some((stroke) => stroke.userId === user.id)
+        socket.emit('whiteboard:undo-state', {
+          roomId: validRoomId,
+          canUndo: hasOwnStroke,
+          canRedo: getRedoStrokes(validRoomId, user.id).length > 0,
+        })
 
         socket.to(validRoomId).emit('session:participant:joined', { roomId: validRoomId, participant: presence })
       } catch (error) {
@@ -255,23 +267,53 @@ export function createSocketServer(httpServer: HttpServer) {
       }
 
       pushWhiteboardStroke(roomId, fullStroke)
+      getRedoStrokes(roomId, user.id).length = 0
       io.to(roomId).emit('whiteboard:stroke', { roomId, stroke: fullStroke })
+      socket.emit('whiteboard:undo-state', { roomId, canUndo: true, canRedo: false })
     })
 
-    socket.on('whiteboard:clear', async ({ roomId }) => {
+    socket.on('whiteboard:undo', async ({ roomId }) => {
       if (!socket.data.rooms?.has(roomId)) return
       const presence = roomParticipants.get(roomId)?.get(user.id)
       if (!presence) {
         return
       }
       const role = await getRoomRole(roomId, user.id)
-      if (role !== 'owner') {
-        socket.emit('session:error', { roomId, message: 'Only the room owner can clear this board.' })
+      if (role !== 'owner' && role !== 'editor') {
+        socket.emit('session:error', { roomId, message: 'Your viewer role cannot change this board.' })
         return
       }
+      const strokes = getWhiteboardStrokes(roomId)
+      const index = strokes.map((stroke) => stroke.userId).lastIndexOf(user.id)
+      if (index === -1) {
+        socket.emit('whiteboard:undo-state', { roomId, canUndo: false, canRedo: getRedoStrokes(roomId, user.id).length > 0 })
+        return
+      }
+      const [stroke] = strokes.splice(index, 1)
+      getRedoStrokes(roomId, user.id).push({ stroke, index })
+      io.to(roomId).emit('whiteboard:stroke:removed', { roomId, strokeId: stroke.id })
+      socket.emit('whiteboard:undo-state', { roomId, canUndo: strokes.some((item) => item.userId === user.id), canRedo: true })
+    })
 
-      clearWhiteboard(roomId)
-      io.to(roomId).emit('whiteboard:clear', { roomId, clearedBy: user.id })
+    socket.on('whiteboard:redo', async ({ roomId }) => {
+      if (!socket.data.rooms?.has(roomId)) return
+      const presence = roomParticipants.get(roomId)?.get(user.id)
+      if (!presence) return
+      const role = await getRoomRole(roomId, user.id)
+      if (role !== 'owner' && role !== 'editor') {
+        socket.emit('session:error', { roomId, message: 'Your viewer role cannot change this board.' })
+        return
+      }
+      const redoStrokes = getRedoStrokes(roomId, user.id)
+      const redoEntry = redoStrokes.pop()
+      if (!redoEntry) {
+        socket.emit('whiteboard:undo-state', { roomId, canUndo: getWhiteboardStrokes(roomId).some((item) => item.userId === user.id), canRedo: false })
+        return
+      }
+      const strokes = getWhiteboardStrokes(roomId)
+      strokes.splice(Math.min(redoEntry.index, strokes.length), 0, redoEntry.stroke)
+      io.to(roomId).emit('whiteboard:stroke', { roomId, stroke: redoEntry.stroke })
+      socket.emit('whiteboard:undo-state', { roomId, canUndo: true, canRedo: redoStrokes.length > 0 })
     })
 
     socket.on('disconnect', () => {
