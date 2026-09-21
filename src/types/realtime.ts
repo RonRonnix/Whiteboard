@@ -17,12 +17,14 @@ export type Point = {
   y: number
 }
 
+export type WhiteboardTool = 'pen' | 'eraser' | 'line' | 'rectangle' | 'ellipse'
+
 export type NewStroke = {
   clientId: string
   points: Point[]
   color: string
   size: number
-  tool?: 'pen' | 'eraser'
+  tool?: WhiteboardTool
 }
 
 export type WhiteboardStroke = {
@@ -33,7 +35,7 @@ export type WhiteboardStroke = {
   displayName: string
   color: string
   size: number
-  tool?: 'pen' | 'eraser'
+  tool?: WhiteboardTool
   points: Point[]
   timestamp: string
 }
