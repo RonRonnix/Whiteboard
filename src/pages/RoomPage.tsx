@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
-import { API_BASE_URL, fetchSessionRoom } from '../lib/api'
+import { API_BASE_URL, fetchRoomMembers, fetchSessionRoom, revokeRoomInvite, rotateRoomInvite, updateRoomInvite, updateRoomMemberRole } from '../lib/api'
 import { useAuthStore, type AuthState } from '../store/authStore'
 import WhiteboardCanvas from '../components/WhiteboardCanvas'
-import type { SessionRoom } from '../types'
+import type { RoomMember, RoomRole, SessionRoom } from '../types'
 import type {
   ChatMessage,
   ClientToServerEvents,
@@ -23,6 +23,7 @@ export default function RoomPage() {
   const currentUser = useAuthStore((state: AuthState) => state.user)
   const currentUserId = currentUser?.id
   const [participants, setParticipants] = useState<ParticipantPresence[]>([])
+  const [members, setMembers] = useState<RoomMember[]>([])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
@@ -35,6 +36,9 @@ export default function RoomPage() {
   const [copiedCode, setCopiedCode] = useState(false)
 
   const roomLabel = useMemo(() => roomId?.slice(0, 6).toUpperCase() ?? 'ROOM', [roomId])
+  const currentMember = members.find((member) => member.userId === currentUserId)
+  const isOwner = currentMember?.role === 'owner'
+  const canDraw = currentMember?.role === 'owner' || currentMember?.role === 'editor'
 
   useEffect(() => {
     if (!roomId) return
@@ -43,9 +47,10 @@ export default function RoomPage() {
     async function loadRoomDetails() {
       try {
         setRoomInfoError(null)
-        const response = await fetchSessionRoom(roomId)
+        const [response, memberResponse] = await Promise.all([fetchSessionRoom(roomId), fetchRoomMembers(roomId)])
         if (!cancelled) {
           setRoomInfo(response.room)
+          setMembers(memberResponse.members)
         }
       } catch (err) {
         if (!cancelled) {
@@ -62,17 +67,11 @@ export default function RoomPage() {
   }, [roomId])
 
   useEffect(() => {
-    if (!roomId || !token) {
-      setError('Missing room or token')
-      setStatus('error')
-      return
-    }
-    setStatus('connecting')
-    setError(null)
-
+    if (!roomId || !currentUser) return
     const socket = io(API_BASE_URL, {
       transports: ['websocket'],
-      auth: { token },
+      withCredentials: true,
+      ...(token ? { auth: { token } } : {}),
     })
 
     socketRef.current = socket
@@ -100,6 +99,12 @@ export default function RoomPage() {
         if (exists) return prev
         return [...prev, participant]
       })
+    })
+
+    socket.on('session:member:role', ({ roomId: updatedRoomId, userId, role }) => {
+      if (updatedRoomId !== roomId) return
+      setMembers((previous) => previous.map((member) => (member.userId === userId ? { ...member, role } : member)))
+      setParticipants((previous) => previous.map((participant) => (participant.userId === userId ? { ...participant, role } : participant)))
     })
 
     socket.on('session:participant:left', ({ userId: leftId }) => {
@@ -148,7 +153,7 @@ export default function RoomPage() {
       socket.emit('session:leave', { roomId })
       socket.disconnect()
     }
-  }, [roomId, token])
+  }, [roomId, token, currentUser])
 
   const handleSendMessage = () => {
     const trimmed = chatInput.trim()
@@ -183,9 +188,49 @@ export default function RoomPage() {
   }
 
   const handleClearBoard = () => {
-    if (!roomId || !socketRef.current) return
+    if (!roomId || !socketRef.current || !isOwner) return
     setStrokes([])
     socketRef.current.emit('whiteboard:clear', { roomId })
+  }
+
+  const handleRoleChange = async (member: RoomMember, role: Exclude<RoomRole, 'owner'>) => {
+    if (!roomId || member.role === role) return
+    try {
+      const response = await updateRoomMemberRole(roomId, member.userId, role)
+      setMembers((previous) => previous.map((item) => (item.userId === member.userId ? response.member : item)))
+    } catch (roleError) {
+      setError(roleError instanceof Error ? roleError.message : 'Unable to update member role')
+    }
+  }
+
+  const handleRotateInvite = async () => {
+    if (!roomId) return
+    try {
+      const response = await rotateRoomInvite(roomId)
+      setRoomInfo(response.room)
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : 'Unable to rotate invite code')
+    }
+  }
+
+  const handleInviteExpiry = async (expiresAt: string | null) => {
+    if (!roomId) return
+    try {
+      const response = await updateRoomInvite(roomId, { expiresAt })
+      setRoomInfo(response.room)
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : 'Unable to update invite expiry')
+    }
+  }
+
+  const handleRevokeInvite = async () => {
+    if (!roomId) return
+    try {
+      const response = await revokeRoomInvite(roomId)
+      setRoomInfo(response.room)
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : 'Unable to revoke invite')
+    }
   }
 
   const handleCopyInviteCode = async () => {
@@ -199,10 +244,10 @@ export default function RoomPage() {
     }
   }
 
-  const handleCursorUpdate = (cursor: CursorState) => {
+  const handleCursorUpdate = useCallback((cursor: CursorState) => {
     if (!socketRef.current || !roomId) return
     socketRef.current.emit('session:cursor', { roomId, cursor })
-  }
+  }, [roomId])
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -216,7 +261,7 @@ export default function RoomPage() {
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
     }
-  }, [status])
+  }, [status, handleCursorUpdate])
 
   const leaveRoom = () => {
     navigate('/')
@@ -252,22 +297,34 @@ export default function RoomPage() {
             </span>
           </div>
           <ul className="mt-4 space-y-3">
-            {participants.map((participant) => (
-              <li key={participant.userId} className="flex items-center justify-between rounded-xl border border-slate-800/70 bg-slate-950/60 px-4 py-3">
+            {members.map((member) => {
+              const participant = participants.find((item) => item.userId === member.userId)
+              return (
+              <li key={member.userId} className="rounded-xl border border-slate-800/70 bg-slate-950/60 px-4 py-3">
                 <div>
                   <p className="font-semibold text-white">
-                    {participant.displayName}
-                    {participant.userId === currentUserId && <span className="ml-2 text-xs text-emerald-300">(You)</span>}
+                    {member.user.displayName}
+                    {member.userId === currentUserId && <span className="ml-2 text-xs text-emerald-300">(You)</span>}
                   </p>
-                  <p className="text-sm text-slate-400">{participant.email}</p>
+                  <p className="text-sm text-slate-400">{member.user.email}</p>
                 </div>
-                {participant.cursor && (
+                <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                  <span className="rounded-full border border-slate-700 px-2 py-1 uppercase tracking-wide text-slate-300">{member.role}</span>
+                  {isOwner && member.role !== 'owner' ? (
+                    <select value={member.role} onChange={(event) => handleRoleChange(member, event.target.value as Exclude<RoomRole, 'owner'>)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                    </select>
+                  ) : null}
+                </div>
+                {participant?.cursor && (
                   <p className="text-xs text-slate-500">
                     Cursor: {Math.round(participant.cursor.x)}, {Math.round(participant.cursor.y)}
                   </p>
                 )}
               </li>
-            ))}
+              )
+            })}
           </ul>
         </section>
 
@@ -282,6 +339,7 @@ export default function RoomPage() {
               <div>
                 <p className="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Invite code</p>
                 <p className="text-xl font-mono font-semibold text-white">{roomInfo ? roomInfo.inviteCode : '--------'}</p>
+                {roomInfo?.inviteRevokedAt ? <p className="text-xs text-rose-300">Invite revoked</p> : roomInfo?.inviteExpiresAt ? <p className="text-xs text-amber-300">Expires {new Date(roomInfo.inviteExpiresAt).toLocaleString()}</p> : null}
               </div>
               <button
                 type="button"
@@ -292,6 +350,14 @@ export default function RoomPage() {
                 {copiedCode ? 'Copied!' : 'Copy code'}
               </button>
             </div>
+            {isOwner && (
+              <div className="flex flex-wrap gap-2 text-xs">
+                <button type="button" onClick={handleRotateInvite} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:border-indigo-400">Rotate code</button>
+                <button type="button" onClick={() => handleInviteExpiry(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:border-indigo-400">Expire in 24h</button>
+                <button type="button" onClick={() => handleInviteExpiry(null)} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:border-indigo-400">No expiry</button>
+                <button type="button" onClick={handleRevokeInvite} className="rounded-lg border border-rose-500/60 px-3 py-2 text-rose-200 hover:border-rose-400">Revoke</button>
+              </div>
+            )}
           </div>
           {roomInfoError && <p className="text-sm text-red-300">{roomInfoError}</p>}
           {error && <p className="text-sm text-red-300">{error}</p>}
@@ -302,7 +368,8 @@ export default function RoomPage() {
                 strokes={strokes}
                 onStrokeComplete={handleStrokeComplete}
                 onClearBoard={handleClearBoard}
-                disabled={status !== 'connected'}
+                disabled={status !== 'connected' || !canDraw}
+                canClear={isOwner}
               />
             </div>
             <div className="rounded-2xl border border-slate-900/60 bg-slate-950/40 lg:w-80 xl:w-96">

@@ -8,6 +8,7 @@ export type ParticipantPresence = {
   userId: string
   displayName: string
   email: string
+  role: 'owner' | 'editor' | 'viewer'
   cursor?: CursorState
 }
 
@@ -64,6 +65,7 @@ export type ServerToClientEvents = {
   }) => void
   'session:participant:joined': (payload: { roomId: string; participant: ParticipantPresence }) => void
   'session:participant:left': (payload: { roomId: string; userId: string }) => void
+  'session:member:role': (payload: { roomId: string; userId: string; role: 'owner' | 'editor' | 'viewer' }) => void
   'session:cursor': (payload: { roomId: string; userId: string; cursor: CursorState }) => void
   'chat:message': (message: ChatMessage) => void
   'whiteboard:stroke': (payload: { roomId: string; stroke: WhiteboardStroke }) => void

@@ -2,8 +2,10 @@ import { Server } from 'socket.io'
 import type { Server as HttpServer } from 'http'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
-import config from '../config'
+import { z } from 'zod'
+import config, { allowedOrigins } from '../config'
 import prisma from '../lib/prisma'
+import { AUTH_COOKIE_NAME } from '../middleware/auth'
 import type {
   ChatMessage,
   ClientToServerEvents,
@@ -18,6 +20,31 @@ const roomChatHistory = new Map<string, ChatMessage[]>()
 const roomWhiteboardStrokes = new Map<string, WhiteboardStroke[]>()
 const MAX_CHAT_HISTORY = 50
 const MAX_WHITEBOARD_STROKES = 1000
+const roomIdSchema = z.string().min(1).max(100)
+const cursorSchema = z.object({
+  x: z.number().finite().min(-100000).max(100000),
+  y: z.number().finite().min(-100000).max(100000),
+  tool: z.string().max(30).optional(),
+})
+const chatSchema = z.object({ roomId: roomIdSchema, content: z.string().trim().min(1).max(2000) })
+const strokeSchema = z.object({
+  roomId: roomIdSchema,
+  stroke: z.object({
+    clientId: z.string().min(1).max(100),
+    points: z.array(z.object({ x: z.number().finite(), y: z.number().finite() })).min(2).max(10000),
+    color: z.string().regex(/^#[0-9a-f]{6}$/i),
+    size: z.number().finite().min(1).max(64),
+    tool: z.string().max(30).optional(),
+  }),
+})
+
+function getCookieValue(cookieHeader: string | undefined, name: string) {
+  return cookieHeader
+    ?.split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`))
+    ?.slice(name.length + 1)
+}
 
 function getParticipants(roomId: string) {
   if (!roomParticipants.has(roomId)) {
@@ -71,14 +98,23 @@ function clearWhiteboard(roomId: string) {
   roomWhiteboardStrokes.set(roomId, [])
 }
 
+async function getRoomRole(roomId: string, userId: string) {
+  const membership = await prisma.sessionRoomMember.findUnique({
+    where: { roomId_userId: { roomId, userId } },
+    select: { role: true },
+  })
+  return membership?.role
+}
+
 type TokenPayload = {
   sub: string
 }
 
 export function createSocketServer(httpServer: HttpServer) {
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, {
+    maxHttpBufferSize: 100 * 1024,
     cors: {
-      origin: config.clientOrigin,
+      origin: [...allowedOrigins],
       credentials: true,
     },
   })
@@ -87,6 +123,7 @@ export function createSocketServer(httpServer: HttpServer) {
     try {
       const rawToken =
         (socket.handshake.auth?.token as string | undefined) ??
+        getCookieValue(socket.handshake.headers.cookie, AUTH_COOKIE_NAME) ??
         (typeof socket.handshake.headers.authorization === 'string'
           ? socket.handshake.headers.authorization.replace('Bearer ', '')
           : undefined)
@@ -119,31 +156,33 @@ export function createSocketServer(httpServer: HttpServer) {
 
     socket.on('session:join', async ({ roomId }) => {
       try {
-        const room = await prisma.sessionRoom.findUnique({ where: { id: roomId } })
-        if (!room) {
-          socket.emit('session:error', { roomId, message: 'Room not found' })
+        const validRoomId = roomIdSchema.parse(roomId)
+        const role = await getRoomRole(validRoomId, user.id)
+        if (!role) {
+          socket.emit('session:error', { roomId: validRoomId, message: 'Room not found or access denied' })
           return
         }
 
-        socket.join(roomId)
-        socket.data.rooms?.add(roomId)
+        socket.join(validRoomId)
+        socket.data.rooms?.add(validRoomId)
 
-        const participants = getParticipants(roomId)
+        const participants = getParticipants(validRoomId)
         const presence: ParticipantPresence = {
           userId: user.id,
           displayName: user.displayName,
           email: user.email,
+          role,
         }
         participants.set(user.id, presence)
 
         socket.emit('session:joined', {
-          roomId,
+          roomId: validRoomId,
           participants: Array.from(participants.values()),
-          chatHistory: getChatHistory(roomId),
-          whiteboardStrokes: getWhiteboardStrokes(roomId),
+          chatHistory: getChatHistory(validRoomId),
+          whiteboardStrokes: getWhiteboardStrokes(validRoomId),
         })
 
-        socket.to(roomId).emit('session:participant:joined', { roomId, participant: presence })
+        socket.to(validRoomId).emit('session:participant:joined', { roomId: validRoomId, participant: presence })
       } catch (error) {
         socket.emit('session:error', {
           roomId,
@@ -153,6 +192,7 @@ export function createSocketServer(httpServer: HttpServer) {
     })
 
     socket.on('session:leave', ({ roomId }) => {
+      if (!socket.data.rooms?.has(roomId)) return
       socket.leave(roomId)
       socket.data.rooms?.delete(roomId)
       removeParticipant(roomId, user.id)
@@ -160,35 +200,44 @@ export function createSocketServer(httpServer: HttpServer) {
     })
 
     socket.on('session:cursor', ({ roomId, cursor }) => {
+      if (!socket.data.rooms?.has(roomId)) return
+      const parsedCursor = cursorSchema.safeParse(cursor)
+      if (!parsedCursor.success) return
       const participants = roomParticipants.get(roomId)
       if (!participants) return
       const presence = participants.get(user.id)
       if (!presence) return
-      presence.cursor = cursor
-      socket.to(roomId).emit('session:cursor', { roomId, userId: user.id, cursor })
+      presence.cursor = parsedCursor.data
+      socket.to(roomId).emit('session:cursor', { roomId, userId: user.id, cursor: parsedCursor.data })
     })
 
-    socket.on('chat:message', ({ roomId, content }) => {
-      const trimmed = content.trim()
-      if (!trimmed) return
+    socket.on('chat:message', (payload) => {
+      const parsed = chatSchema.safeParse(payload)
+      if (!parsed.success || !socket.data.rooms?.has(parsed.data.roomId)) return
+      const { roomId, content } = parsed.data
       const message: ChatMessage = {
         id: crypto.randomUUID(),
         roomId,
         userId: user.id,
         displayName: user.displayName,
-        content: trimmed,
+        content,
         timestamp: new Date().toISOString(),
       }
       pushChatMessage(roomId, message)
       io.to(roomId).emit('chat:message', message)
     })
 
-    socket.on('whiteboard:stroke', ({ roomId, stroke }) => {
-      if (!stroke.points || stroke.points.length < 2) {
-        return
-      }
+    socket.on('whiteboard:stroke', async (payload) => {
+      const parsed = strokeSchema.safeParse(payload)
+      if (!parsed.success || !socket.data.rooms?.has(parsed.data.roomId)) return
+      const { roomId, stroke } = parsed.data
       const presence = roomParticipants.get(roomId)?.get(user.id)
       if (!presence) {
+        return
+      }
+      const role = await getRoomRole(roomId, user.id)
+      if (role !== 'owner' && role !== 'editor') {
+        socket.emit('session:error', { roomId, message: 'Your viewer role cannot draw on this board.' })
         return
       }
 
@@ -209,9 +258,15 @@ export function createSocketServer(httpServer: HttpServer) {
       io.to(roomId).emit('whiteboard:stroke', { roomId, stroke: fullStroke })
     })
 
-    socket.on('whiteboard:clear', ({ roomId }) => {
+    socket.on('whiteboard:clear', async ({ roomId }) => {
+      if (!socket.data.rooms?.has(roomId)) return
       const presence = roomParticipants.get(roomId)?.get(user.id)
       if (!presence) {
+        return
+      }
+      const role = await getRoomRole(roomId, user.id)
+      if (role !== 'owner') {
+        socket.emit('session:error', { roomId, message: 'Only the room owner can clear this board.' })
         return
       }
 

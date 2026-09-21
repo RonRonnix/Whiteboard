@@ -1,16 +1,17 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
 import config from '../config'
-import { requireAuth, type AuthRequest } from '../middleware/auth'
+import { AUTH_COOKIE_NAME, requireAuth, type AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
 const VERIFICATION_TTL_MINUTES = 30
 const RESEND_COOLDOWN_MS = 60 * 1000
+const AUTH_COOKIE_MAX_AGE = 24 * 60 * 60 * 1000
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -38,6 +39,16 @@ function normalizeEmail(email: string) {
 
 function createToken(userId: string) {
   return jwt.sign({ sub: userId }, config.jwtSecret, { expiresIn: '1d' })
+}
+
+function setAuthCookie(res: Response, token: string) {
+  res.cookie(AUTH_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: config.nodeEnv === 'production',
+    sameSite: 'lax',
+    maxAge: AUTH_COOKIE_MAX_AGE,
+    path: '/',
+  })
 }
 
 function maskUser(user: { id: string; email: string; displayName: string; status: string; emailVerifiedAt: Date | null }) {
@@ -124,9 +135,9 @@ router.post('/login', async (req, res, next) => {
     }
 
     const token = createToken(user.id)
+    setAuthCookie(res, token)
 
     return res.json({
-      token,
       user: maskUser(user),
     })
   } catch (error) {
@@ -147,7 +158,8 @@ router.post('/verify', async (req, res, next) => {
 
     if (user.status === 'active') {
       const token = createToken(user.id)
-      return res.json({ token, user: maskUser(user) })
+      setAuthCookie(res, token)
+      return res.json({ user: maskUser(user) })
     }
 
     const verification = await prisma.emailVerification.findFirst({
@@ -178,14 +190,19 @@ router.post('/verify', async (req, res, next) => {
     })
 
     const token = createToken(updatedUser.id)
+    setAuthCookie(res, token)
 
     return res.json({
-      token,
       user: maskUser(updatedUser),
     })
   } catch (error) {
     next(error)
   }
+})
+
+router.post('/logout', (_req, res) => {
+  res.clearCookie(AUTH_COOKIE_NAME, { httpOnly: true, secure: config.nodeEnv === 'production', sameSite: 'lax', path: '/' })
+  return res.json({ message: 'Signed out' })
 })
 
 router.post('/resend-code', async (req, res, next) => {

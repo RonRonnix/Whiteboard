@@ -12,4 +12,16 @@ export type SessionRoom = {
   inviteCode: string
   createdAt: string
   createdById: string
+  inviteExpiresAt: string | null
+  inviteRevokedAt: string | null
+}
+
+export type RoomRole = 'owner' | 'editor' | 'viewer'
+
+export type RoomMember = {
+  roomId: string
+  userId: string
+  role: RoomRole
+  joinedAt: string
+  user: Pick<User, 'id' | 'email' | 'displayName'>
 }

@@ -1,73 +1,65 @@
-# React + TypeScript + Vite
+# Whiteboard Lab
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A room-based collaborative whiteboard with authenticated users, Socket.IO presence/chat/drawing, and a PostgreSQL database managed by Prisma.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- React, TypeScript, Vite, Tailwind CSS, Zustand
+- Express, Socket.IO, Zod, Helmet, and JWT cookie authentication
+- PostgreSQL and Prisma
 
-## React Compiler
+## Run locally
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+1. Copy `.env.example` to `.env` and set `VITE_API_URL` if the API is not on port 4000.
+2. Copy `server/.env.example` to `server/.env`, then set `DATABASE_URL` and a strong `JWT_SECRET`.
+3. Create the PostgreSQL database named in `DATABASE_URL`.
+4. Install dependencies in both folders:
 
-## Expanding the ESLint configuration
+   ```powershell
+   npm install
+   Set-Location server
+   npm install
+   npm run prisma:generate
+   npm run prisma:deploy
+   ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+5. In separate terminals, start the API and web app:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+   ```powershell
+   Set-Location server
+   npm run dev
+   ```
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+   ```powershell
+   npm run dev
+   ```
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The client runs at `http://localhost:5173`; the API runs at `http://localhost:4000`.
+
+## Room permissions
+
+Each room membership has one of these roles:
+
+- **Owner** — manages member roles and invite settings; can draw and clear the board.
+- **Editor** — can draw and chat.
+- **Viewer** — can view, move their cursor, and chat, but cannot draw or clear the board.
+
+Joining with an active invite always grants the **viewer** role. The owner can promote or demote members using the room’s member list. Permissions are checked on the server for every protected Socket.IO action.
+
+## Invite controls
+
+The owner can set a 24-hour expiry, remove expiry, revoke the current code, or rotate it. Revoking/rotating blocks new joins using the old code; it never removes existing members.
+
+## Checks
+
+```powershell
+npm run build
+npm run lint
+
+Set-Location server
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Current scope
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Room identities, memberships, roles, and invite controls are persisted. Live cursors, chat, and whiteboard strokes are currently in server memory, so they reset when the server restarts. Persisting those collaboration records is the next planned phase.

@@ -12,6 +12,12 @@ enum UserStatus {
   active
 }
 
+enum RoomRole {
+  owner
+  editor
+  viewer
+}
+
 model User {
   id              String              @id @default(cuid())
   email           String              @unique
@@ -21,7 +27,8 @@ model User {
   emailVerifiedAt DateTime?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
-  rooms           SessionRoom[]
+  createdRooms    SessionRoom[]       @relation("RoomCreator")
+  roomMemberships SessionRoomMember[]
   verifications   EmailVerification[]
 }
 
@@ -31,10 +38,26 @@ model SessionRoom {
   inviteCode  String   @unique
   createdAt   DateTime @default(now())
   createdById String
+  inviteExpiresAt DateTime?
+  inviteRevokedAt DateTime?
 
-  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy User              @relation("RoomCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members   SessionRoomMember[]
 
   @@index([createdById])
+}
+
+model SessionRoomMember {
+  roomId   String
+  userId   String
+  role     RoomRole @default(viewer)
+  joinedAt DateTime @default(now())
+
+  room SessionRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@index([userId])
 }
 
 model EmailVerification {

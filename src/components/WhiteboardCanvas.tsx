@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { NewStroke, Point, WhiteboardStroke } from '../types/realtime'
 
 const COLORS = ['#f97316', '#ef4444', '#fde047', '#34d399', '#22d3ee', '#a855f7', '#cbd5f5']
@@ -29,10 +29,11 @@ type WhiteboardCanvasProps = {
   onStrokeComplete: (stroke: NewStroke) => void
   onClearBoard: () => void
   disabled?: boolean
+  canClear?: boolean
   className?: string
 }
 
-export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoard, disabled = false, className }: WhiteboardCanvasProps) {
+export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoard, disabled = false, canClear = !disabled, className }: WhiteboardCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
   const [color, setColor] = useState(COLORS[0])
@@ -40,6 +41,19 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoa
   const drawingRef = useRef(false)
   const liveStrokeRef = useRef<NewStroke | null>(null)
   const devicePixelRatioRef = useRef(1)
+
+  const redraw = useCallback(() => {
+    const canvas = canvasRef.current
+    const ctx = ctxRef.current
+    if (!canvas || !ctx) return
+    const dpr = devicePixelRatioRef.current
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr)
+    strokes.forEach((stroke) => drawStroke(ctx, stroke))
+    if (liveStrokeRef.current) {
+      drawStroke(ctx, liveStrokeRef.current)
+    }
+  }, [strokes])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -71,24 +85,11 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoa
     return () => {
       observer.disconnect()
     }
-  }, [])
+  }, [redraw])
 
   useEffect(() => {
     redraw()
-  }, [strokes])
-
-  const redraw = () => {
-    const canvas = canvasRef.current
-    const ctx = ctxRef.current
-    if (!canvas || !ctx) return
-    const dpr = devicePixelRatioRef.current
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr)
-    strokes.forEach((stroke) => drawStroke(ctx, stroke))
-    if (liveStrokeRef.current) {
-      drawStroke(ctx, liveStrokeRef.current)
-    }
-  }
+  }, [redraw])
 
   const getPointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>): Point | null => {
     const canvas = canvasRef.current
@@ -146,6 +147,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoa
   }
 
   const handleClear = () => {
+    if (!canClear) return
     liveStrokeRef.current = null
     drawingRef.current = false
     onClearBoard()
@@ -181,7 +183,8 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onClearBoa
           <button
             type="button"
             onClick={handleClear}
-            className="rounded-xl border border-rose-500/60 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-rose-200 transition hover:border-rose-400"
+            disabled={!canClear}
+            className="rounded-xl border border-rose-500/60 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Clear board
           </button>

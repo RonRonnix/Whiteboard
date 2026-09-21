@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { createSessionRoom, fetchSessionRooms, joinSessionRoom } from '../lib/api'
+import { createSessionRoom, fetchSessionRooms, joinSessionRoom, logoutRequest } from '../lib/api'
 import type { SessionRoom } from '../types'
 import { useAuthStore, type AuthState } from '../store/authStore'
 
@@ -16,6 +16,14 @@ export default function HomePage() {
   const [creating, setCreating] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
+
+  const handleLogout = async () => {
+    try {
+      await logoutRequest()
+    } finally {
+      logout()
+    }
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -93,7 +101,7 @@ export default function HomePage() {
             <p className="font-medium text-slate-100">{user?.displayName}</p>
             <p>{user?.email}</p>
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="mt-2 text-xs font-semibold uppercase tracking-wide text-indigo-300 hover:text-indigo-200 cursor-pointer"
             >
               Sign out

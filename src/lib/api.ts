@@ -1,10 +1,10 @@
 import { clearAuthState, getAuthToken } from '../store/authStore'
-import type { SessionRoom, User } from '../types'
+import type { RoomMember, RoomRole, SessionRoom, User } from '../types'
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
 
 type AuthResponse = {
-  token: string
+  token?: string
   user: User
 }
 
@@ -28,10 +28,11 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
+    credentials: 'include',
     headers,
   })
 
-  if (response.status === 401 && token) {
+  if (response.status === 401) {
     clearAuthState()
     throw new Error('Your session expired. Please sign in again.')
   }
@@ -73,6 +74,10 @@ export function resendVerificationRequest(payload: { email: string }) {
   })
 }
 
+export function logoutRequest() {
+  return apiFetch<{ message: string }>('/api/auth/logout', { method: 'POST' })
+}
+
 export function fetchSessionRooms() {
   return apiFetch<{ rooms: SessionRoom[] }>('/api/session-rooms')
 }
@@ -93,4 +98,30 @@ export function joinSessionRoom(payload: { inviteCode: string }) {
 
 export function fetchSessionRoom(roomId: string) {
   return apiFetch<{ room: SessionRoom }>(`/api/session-rooms/${roomId}`)
+}
+
+export function fetchRoomMembers(roomId: string) {
+  return apiFetch<{ members: RoomMember[] }>(`/api/session-rooms/${roomId}/members`)
+}
+
+export function updateRoomMemberRole(roomId: string, userId: string, role: Exclude<RoomRole, 'owner'>) {
+  return apiFetch<{ member: RoomMember }>(`/api/session-rooms/${roomId}/members/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  })
+}
+
+export function rotateRoomInvite(roomId: string) {
+  return apiFetch<{ room: SessionRoom }>(`/api/session-rooms/${roomId}/invite/rotate`, { method: 'POST' })
+}
+
+export function updateRoomInvite(roomId: string, payload: { expiresAt: string | null }) {
+  return apiFetch<{ room: SessionRoom }>(`/api/session-rooms/${roomId}/invite`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function revokeRoomInvite(roomId: string) {
+  return apiFetch<{ room: SessionRoom }>(`/api/session-rooms/${roomId}/invite/revoke`, { method: 'POST' })
 }
