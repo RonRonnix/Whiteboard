@@ -90,19 +90,19 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <header className="border-b border-slate-900/70 bg-slate-950/70 px-6 py-4 backdrop-blur">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#083344_0%,_#06111d_42%,_#020617_100%)] text-slate-50">
+      <header className="border-b border-cyan-950/80 bg-slate-950/65 px-6 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.4em] text-indigo-400">Whiteboard Lab</p>
-            <h1 className="text-xl font-semibold text-white">Realtime Collaboration Hub</h1>
+            <p className="text-xs uppercase tracking-[0.4em] text-cyan-300">Whiteboard Lab</p>
+            <h1 className="text-xl font-semibold text-white">Your shared workspace</h1>
           </div>
           <div className="text-right text-sm text-slate-400">
             <p className="font-medium text-slate-100">{user?.displayName}</p>
             <p>{user?.email}</p>
             <button
               onClick={handleLogout}
-              className="mt-2 text-xs font-semibold uppercase tracking-wide text-indigo-300 hover:text-indigo-200 cursor-pointer"
+              className="mt-2 cursor-pointer text-xs font-semibold uppercase tracking-wide text-emerald-300 hover:text-emerald-200"
             >
               Sign out
             </button>
@@ -111,7 +111,7 @@ export default function HomePage() {
       </header>
 
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10">
-        <section className="rounded-2xl border border-slate-900/60 bg-slate-900/60 p-6 shadow-lg shadow-black/40">
+        <section className="rounded-2xl border border-cyan-950/80 bg-slate-950/50 p-6 shadow-lg shadow-cyan-950/30 backdrop-blur-sm">
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
               <h2 className="text-lg font-semibold text-white">Create a session room</h2>
@@ -124,20 +124,20 @@ export default function HomePage() {
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="Sprint planning with Design"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-base text-white outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
+                  className="w-full rounded-xl border border-cyan-900 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/25"
                   required
                   minLength={3}
                 />
                 <button
                   type="submit"
                   disabled={creating}
-                  className="rounded-xl bg-indigo-500/90 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed cursor-pointer disabled:opacity-60"
+                  className="cursor-pointer rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-slate-950 shadow-lg shadow-emerald-950/30 transition hover:from-cyan-400 hover:to-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {creating ? 'Creating…' : 'Create room'}
                 </button>
               </form>
             </div>
-            <div className="rounded-2xl border border-dashed border-slate-800/80 bg-slate-950/40 p-5">
+            <div className="rounded-2xl border border-dashed border-emerald-800/70 bg-emerald-950/15 p-5">
               <h2 className="text-lg font-semibold text-white">Join by invite code</h2>
               <p className="mt-1 text-sm text-slate-400">Enter the 8-character code you received to hop into an existing room.</p>
               <form className="mt-5 flex flex-col gap-4" onSubmit={handleJoinRoom}>
@@ -146,14 +146,14 @@ export default function HomePage() {
                   value={joinCode}
                   onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
                   placeholder="e.g. 1A2B3C4D"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-base tracking-[0.3em] text-white outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
+                  className="w-full rounded-xl border border-cyan-900 bg-slate-950/70 px-4 py-3 text-base tracking-[0.3em] text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/25"
                   required
                   minLength={6}
                 />
                 <button
                   type="submit"
                   disabled={joining}
-                  className="rounded-xl border border-indigo-500/80 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-indigo-200 transition hover:border-indigo-400 hover:text-white disabled:cursor-not-allowed cursor-pointer disabled:opacity-60"
+                  className="cursor-pointer rounded-xl border border-emerald-500/70 bg-emerald-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300 hover:bg-emerald-400/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {joining ? 'Joining…' : 'Join room'}
                 </button>
@@ -162,13 +162,13 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-900/60 bg-slate-900/40 p-6 shadow-inner shadow-black/30">
+        <section className="rounded-2xl border border-cyan-950/80 bg-slate-950/40 p-6 shadow-inner shadow-cyan-950/30">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-white">Your session rooms</h2>
               <p className="text-sm text-slate-400">Invite-only workspaces you have created.</p>
             </div>
-            <span className="rounded-full border border-slate-800 px-3 py-1 text-xs uppercase tracking-widest text-slate-400">
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-widest text-emerald-200">
               {rooms.length} active
             </span>
           </div>
@@ -180,7 +180,7 @@ export default function HomePage() {
           ) : (
             <ul className="mt-6 space-y-4">
               {rooms.map((room) => (
-                <li key={room.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <li key={room.id} className="rounded-xl border border-cyan-950/80 bg-slate-950/65 p-4 transition hover:border-cyan-700">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-base font-semibold text-white">{room.title}</p>
@@ -189,11 +189,11 @@ export default function HomePage() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-xs text-slate-400">Invite code</p>
-                        <p className="text-lg font-mono font-semibold text-indigo-300">{room.inviteCode}</p>
+                        <p className="text-lg font-mono font-semibold text-cyan-200">{room.inviteCode}</p>
                       </div>
                       <Link
                         to={`/rooms/${room.id}`}
-                        className="rounded-xl border border-indigo-500/60 px-4 py-2 text-sm font-semibold text-indigo-200 transition hover:border-indigo-400 hover:text-white"
+                        className="rounded-xl border border-cyan-500/60 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white"
                       >
                         Enter room
                       </Link>

@@ -2,7 +2,7 @@
 
 :root {
   color: #e2e8f0;
-  background-color: #020617;
+  background-color: #06111d;
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   line-height: 1.5;
 }
@@ -14,7 +14,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #030712;
+  background-color: #06111d;
 }
 
 a {

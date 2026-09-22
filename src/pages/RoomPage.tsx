@@ -297,48 +297,50 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-950 text-slate-50">
-      <header className="flex items-center justify-between border-b border-slate-900/70 bg-slate-950/60 px-6 py-4">
+    <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top,_#083344_0%,_#06111d_42%,_#020617_100%)] text-slate-50">
+      <header className="flex items-center justify-between border-b border-cyan-950/80 bg-slate-950/65 px-6 py-4 backdrop-blur">
         <div className="px-6">
-          <p className="text-xs uppercase tracking-[0.4em] text-indigo-400">Session</p>
-          <h1 className="text-xl font-semibold text-white">Room {roomLabel}</h1>
+          <p className="text-xs uppercase tracking-[0.4em] text-cyan-300">Shared session</p>
+          <h1 className="text-xl font-semibold text-white">Team room {roomLabel}</h1>
           <p className="text-sm text-slate-400">
-            Status: <span className={status === 'connected' ? 'text-emerald-300' : 'text-amber-300'}>{status}</span>
+            <span className={`mr-2 inline-block h-2 w-2 rounded-full ${status === 'connected' ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]' : 'bg-amber-400'}`} />
+            {status === 'connected' ? 'Live collaboration is on' : status}
           </p>
         </div>
         <button
           onClick={leaveRoom}
-          className="mr-6 rounded-xl border border-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-slate-700"
+          className="mr-6 rounded-xl border border-cyan-900 bg-slate-950/50 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500 hover:text-cyan-100"
         >
           Leave room
         </button>
       </header>
 
       <main className="flex w-full flex-1 flex-col gap-6 px-6 py-6 lg:grid lg:grid-cols-[320px_minmax(0,1fr)]">
-        <section className="rounded-2xl border border-slate-900/60 bg-slate-900/40 p-4">
-          <div className="flex items-center justify-between border-b border-slate-800/70 pb-4">
+        <section className="rounded-2xl border border-cyan-950/80 bg-slate-950/45 p-4 shadow-xl shadow-cyan-950/20 backdrop-blur-sm">
+          <div className="flex items-center justify-between border-b border-cyan-950/70 pb-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">Participants</h2>
-              <p className="text-sm text-slate-400">Live cursors update while you move your mouse.</p>
+              <h2 className="text-lg font-semibold text-white">Collaborators</h2>
+              <p className="text-sm text-slate-400">Everyone with access to this shared board.</p>
             </div>
-            <span className="rounded-full border border-slate-800 px-3 py-1 text-xs uppercase tracking-widest text-slate-400">
-              {participants.length} online
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-widest text-emerald-200">
+              {participants.length} live
             </span>
           </div>
           <ul className="mt-4 space-y-3">
             {members.map((member) => {
               const participant = participants.find((item) => item.userId === member.userId)
               return (
-              <li key={member.userId} className="rounded-xl border border-slate-800/70 bg-slate-950/60 px-4 py-3">
+              <li key={member.userId} className="rounded-xl border border-cyan-950/80 bg-slate-950/65 px-4 py-3 transition hover:border-cyan-800">
                 <div>
                   <p className="font-semibold text-white">
+                    <span className={`mr-2 inline-block h-2 w-2 rounded-full ${participant ? 'bg-emerald-400' : 'bg-slate-600'}`} />
                     {member.user.displayName}
                     {member.userId === currentUserId && <span className="ml-2 text-xs text-emerald-300">(You)</span>}
                   </p>
                   <p className="text-sm text-slate-400">{member.user.email}</p>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-                  <span className="rounded-full border border-slate-700 px-2 py-1 uppercase tracking-wide text-slate-300">{member.role}</span>
+                  <span className="rounded-full border border-cyan-800 bg-cyan-950/50 px-2 py-1 uppercase tracking-wide text-cyan-100">{member.role}</span>
                   {isOwner && member.role !== 'owner' ? (
                     <select value={member.role} onChange={(event) => handleRoleChange(member, event.target.value as Exclude<RoomRole, 'owner'>)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
                       <option value="viewer">Viewer</option>
@@ -357,24 +359,24 @@ export default function RoomPage() {
           </ul>
         </section>
 
-        <section className="flex min-h-0 flex-1 flex-col gap-6 rounded-3xl border border-slate-900/60 bg-slate-900/40 p-4 shadow-2xl shadow-black/40">
-          <div className="flex flex-col gap-4 border-b border-slate-800/70 pb-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="flex min-h-0 flex-1 flex-col gap-6 rounded-3xl border border-cyan-950/80 bg-slate-950/45 p-4 shadow-2xl shadow-cyan-950/30 backdrop-blur-sm">
+          <div className="flex flex-col gap-4 border-b border-cyan-950/70 pb-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-indigo-400">Whiteboard</p>
-              <h2 className="text-2xl font-semibold text-white">Sketch ideas together</h2>
-              <p className="text-sm text-slate-500">{strokes.length} live strokes</p>
+              <p className="text-xs uppercase tracking-[0.4em] text-cyan-300">Shared canvas</p>
+              <h2 className="text-2xl font-semibold text-white">Build the idea together</h2>
+              <p className="text-sm text-emerald-200/70">{strokes.length} shared marks on the board</p>
             </div>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={handleUndo} disabled={!canDraw || !undoState.canUndo} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 hover:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">
+              <button type="button" onClick={handleUndo} disabled={!canDraw || !undoState.canUndo} className="rounded-xl border border-cyan-900 bg-cyan-950/30 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-40">
                 Undo
               </button>
-              <button type="button" onClick={handleRedo} disabled={!canDraw || !undoState.canRedo} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 hover:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">
+              <button type="button" onClick={handleRedo} disabled={!canDraw || !undoState.canRedo} className="rounded-xl border border-cyan-900 bg-cyan-950/30 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-40">
                 Redo
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-800/70 bg-slate-950/60 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-cyan-900/70 bg-gradient-to-r from-cyan-950/60 to-emerald-950/30 px-4 py-3">
               <div>
-                <p className="text-[0.65rem] uppercase tracking-[0.4em] text-slate-500">Invite code</p>
+                <p className="text-[0.65rem] uppercase tracking-[0.4em] text-cyan-300/70">Invite code</p>
                 <p className="text-xl font-mono font-semibold text-white">{roomInfo ? roomInfo.inviteCode : '--------'}</p>
                 {roomInfo?.inviteRevokedAt ? <p className="text-xs text-rose-300">Invite revoked</p> : roomInfo?.inviteExpiresAt ? <p className="text-xs text-amber-300">Expires {new Date(roomInfo.inviteExpiresAt).toLocaleString()}</p> : null}
               </div>
@@ -382,7 +384,7 @@ export default function RoomPage() {
                 type="button"
                 onClick={handleCopyInviteCode}
                 disabled={!roomInfo}
-                className="rounded-xl border border-indigo-500/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-200 transition hover:border-indigo-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-emerald-500/60 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {copiedCode ? 'Copied!' : 'Copy code'}
               </button>
@@ -407,20 +409,20 @@ export default function RoomPage() {
                 disabled={status !== 'connected' || !canDraw}
               />
             </div>
-            <div className="rounded-2xl border border-slate-900/60 bg-slate-950/40 lg:w-80 xl:w-96">
-              <div className="flex items-center justify-between border-b border-slate-800/60 px-4 py-3">
+            <div className="rounded-2xl border border-cyan-950/80 bg-slate-950/55 lg:w-80 xl:w-96">
+              <div className="flex items-center justify-between border-b border-cyan-950/70 px-4 py-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.35em] text-indigo-400">Chat</p>
-                  <h3 className="text-lg font-semibold text-white">Share quick notes</h3>
-                  <p className="text-sm text-slate-400">Messages stay in sync while you draw.</p>
+                  <p className="text-xs uppercase tracking-[0.35em] text-emerald-300">Team chat</p>
+                  <h3 className="text-lg font-semibold text-white">Keep the team moving</h3>
+                  <p className="text-sm text-slate-400">Notes appear instantly for everyone here.</p>
                 </div>
               </div>
               <div className="flex max-h-[32rem] flex-col">
                 <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
                   {chatMessages.map((message) => (
-                    <div key={message.id} className="rounded-xl border border-slate-800/60 bg-slate-950/70 px-4 py-3">
+                    <div key={message.id} className="rounded-xl border border-cyan-950/70 bg-cyan-950/20 px-4 py-3">
                       <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span className="font-semibold text-slate-200">{message.displayName}</span>
+                        <span className="font-semibold text-cyan-100">{message.displayName}</span>
                         <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
                       </div>
                       <p className="mt-1 text-sm text-slate-100">{message.content}</p>
@@ -428,7 +430,7 @@ export default function RoomPage() {
                   ))}
                   <div ref={chatEndRef} />
                 </div>
-                <div className="border-t border-slate-800/70 p-4">
+                <div className="border-t border-cyan-950/70 p-4">
                   <div className="flex gap-3">
                     <input
                       type="text"
@@ -441,12 +443,12 @@ export default function RoomPage() {
                         }
                       }}
                       placeholder="Type a message"
-                      className="flex-1 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-2 text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
+                      className="flex-1 rounded-xl border border-cyan-900 bg-slate-950/70 px-4 py-2 text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/25"
                     />
                     <button
                       type="button"
                       onClick={handleSendMessage}
-                      className="rounded-xl bg-indigo-500/90 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+                      className="rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-950/30 transition hover:from-cyan-400 hover:to-emerald-400"
                     >
                       Send
                     </button>

@@ -101,9 +101,9 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * cameraOffset.x, dpr * cameraOffset.y)
-    ctx.fillStyle = '#020617'
+    ctx.fillStyle = '#061a26'
     ctx.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT)
-    ctx.strokeStyle = '#334155'
+    ctx.strokeStyle = '#176b87'
     ctx.lineWidth = 2 / zoom
     ctx.strokeRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT)
     strokes.forEach((stroke) => drawStroke(ctx, stroke))
@@ -275,22 +275,22 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
   }
 
   return (
-    <div className={`relative flex h-[500px] min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-900/60 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 shadow-inner shadow-black/40 ${className ?? ''}`}>
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-800/70 px-4 py-3">
+    <div className={`relative flex h-[500px] min-h-0 flex-col overflow-hidden rounded-2xl border border-cyan-950/80 bg-gradient-to-br from-sky-950 via-[#061a26] to-emerald-950/70 shadow-inner shadow-cyan-950/50 ${className ?? ''}`}>
+      <div className="flex flex-wrap items-center gap-3 border-b border-cyan-900/60 bg-slate-950/25 px-4 py-3">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setTool('pen')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'pen' ? 'border-indigo-400 bg-indigo-500/20 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}>
+          <button type="button" onClick={() => setTool('pen')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'pen' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
             Pen
           </button>
-          <button type="button" onClick={() => setTool('eraser')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'eraser' ? 'border-indigo-400 bg-indigo-500/20 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}>
+          <button type="button" onClick={() => setTool('eraser')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'eraser' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
             Eraser
           </button>
-          <button type="button" onClick={() => setTool('line')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'line' ? 'border-indigo-400 bg-indigo-500/20 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}>
+          <button type="button" onClick={() => setTool('line')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'line' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
             Line
           </button>
-          <button type="button" onClick={() => setTool('rectangle')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'rectangle' ? 'border-indigo-400 bg-indigo-500/20 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}>
+          <button type="button" onClick={() => setTool('rectangle')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'rectangle' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
             Rectangle
           </button>
-          <button type="button" onClick={() => setTool('ellipse')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'ellipse' ? 'border-indigo-400 bg-indigo-500/20 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}>
+          <button type="button" onClick={() => setTool('ellipse')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'ellipse' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
             Ellipse
           </button>
         </div>
@@ -315,7 +315,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
             step={1}
             value={brushSize}
             onChange={(event) => setBrushSize(Number(event.target.value))}
-            className="w-32 accent-indigo-400"
+            className="w-32 accent-emerald-400"
           />
           <span className="flex min-w-16 items-center gap-2 text-slate-300">
             <span

@@ -106,10 +106,10 @@ export default function LoginPage() {
       : 'Sign in or create a free account to start collaborating in shared rooms.'
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12 text-slate-50">
-      <div className="w-full max-w-md space-y-6 rounded-2xl border border-slate-800/60 bg-slate-900/70 p-8 shadow-2xl shadow-slate-950/40">
+    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_#083344_0%,_#06111d_44%,_#020617_100%)] px-4 py-12 text-slate-50">
+      <div className="w-full max-w-md space-y-6 rounded-2xl border border-cyan-950/80 bg-slate-950/60 p-8 shadow-2xl shadow-cyan-950/40 backdrop-blur-sm">
         <div className="space-y-2 text-center">
-          <p className="text-sm uppercase tracking-[0.3em] text-indigo-300">Whiteboard Lab</p>
+          <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Whiteboard Lab</p>
           <h1 className="text-3xl font-semibold text-white">{heading}</h1>
           <p className="text-sm text-slate-400">{description}</p>
         </div>
@@ -123,7 +123,7 @@ export default function LoginPage() {
                 name="displayName"
                 value={form.displayName}
                 onChange={(event) => setForm({ ...form, displayName: event.target.value })}
-                className="w-full rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2.5 text-slate-100 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
+                className="w-full rounded-xl border border-cyan-900 bg-slate-950/70 px-4 py-2.5 text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/25"
                 placeholder="e.g. Jordan Woods"
                 required
                 minLength={2}
@@ -139,7 +139,7 @@ export default function LoginPage() {
                 name="email"
                 value={form.email}
                 onChange={(event) => setForm({ ...form, email: event.target.value })}
-                className="w-full rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2.5 text-slate-100 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
+                className="w-full rounded-xl border border-cyan-900 bg-slate-950/70 px-4 py-2.5 text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/25"
                 placeholder="you@example.com"
                 required
               />
@@ -154,7 +154,7 @@ export default function LoginPage() {
                 name="password"
                 value={form.password}
                 onChange={(event) => setForm({ ...form, password: event.target.value })}
-                className="w-full rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2.5 text-slate-100 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
+                className="w-full rounded-xl border border-cyan-900 bg-slate-950/70 px-4 py-2.5 text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/25"
                 placeholder="••••••••"
                 required
                 minLength={view === 'login' ? 1 : 8}
@@ -164,7 +164,7 @@ export default function LoginPage() {
 
           {view === 'verify' && (
             <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-800/60 bg-slate-900/60 px-4 py-3 text-sm text-slate-300">
+              <div className="rounded-2xl border border-emerald-900/60 bg-emerald-950/20 px-4 py-3 text-sm text-slate-300">
                 <p className="font-semibold text-white">{pendingEmail}</p>
                 <p className="text-xs text-slate-400">Code valid for 30 minutes.</p>
               </div>
@@ -177,7 +177,7 @@ export default function LoginPage() {
                   name="verificationCode"
                   value={verificationCode}
                   onChange={(event) => setVerificationCode(event.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-                  className="w-full rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2.5 text-center text-lg font-mono tracking-[0.5em] text-slate-100 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40"
+                className="w-full rounded-xl border border-cyan-900 bg-slate-950/70 px-4 py-2.5 text-center text-lg font-mono tracking-[0.5em] text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/25"
                   placeholder="123456"
                   required
                 />
@@ -186,7 +186,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={handleResend}
                 disabled={resendStatus === 'loading'}
-                className="text-sm font-semibold text-indigo-300 hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
+                className="text-sm font-semibold text-emerald-300 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {resendStatus === 'loading' ? 'Sending…' : 'Resend code'}
               </button>
@@ -201,7 +201,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={status === 'loading'}
-            className="flex w-full items-center justify-center rounded-xl bg-indigo-500/90 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition cursor-pointer hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full cursor-pointer items-center justify-center rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-slate-950 shadow-lg shadow-emerald-950/30 transition hover:from-cyan-400 hover:to-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {status === 'loading'
               ? 'Please wait…'
@@ -217,14 +217,14 @@ export default function LoginPage() {
           {view === 'login' ? (
             <p>
               Need an account?{' '}
-              <button type="button" onClick={switchToRegister} className="font-semibold text-indigo-300 hover:text-indigo-200 cursor-pointer">
+              <button type="button" onClick={switchToRegister} className="cursor-pointer font-semibold text-cyan-300 hover:text-cyan-200">
                 Create one now
               </button>
             </p>
           ) : view === 'register' ? (
             <p>
               Already a member?{' '}
-              <button type="button" onClick={switchToLogin} className="font-semibold text-indigo-300 hover:text-indigo-200 cursor-pointer">
+              <button type="button" onClick={switchToLogin} className="cursor-pointer font-semibold text-cyan-300 hover:text-cyan-200">
                 Return to sign in
               </button>
             </p>
@@ -232,7 +232,7 @@ export default function LoginPage() {
             <div className="space-y-2">
               <p>
                 Need to update your email?{' '}
-                <button type="button" onClick={switchToRegister} className="font-semibold text-indigo-300 hover:text-indigo-200">
+                <button type="button" onClick={switchToRegister} className="font-semibold text-cyan-300 hover:text-cyan-200">
                   Start over
                 </button>
               </p>
