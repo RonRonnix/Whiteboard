@@ -33,7 +33,7 @@ const strokeSchema = z.object({
   roomId: roomIdSchema,
   stroke: z.object({
     clientId: z.string().min(1).max(100),
-    points: z.array(z.object({ x: z.number().finite(), y: z.number().finite() })).min(2).max(10000),
+    points: z.array(z.object({ x: z.number().finite(), y: z.number().finite() })).min(1).max(10000),
     color: z.string().regex(/^#[0-9a-f]{6}$/i),
     size: z.number().finite().min(1).max(64),
     tool: z.enum(['pen', 'eraser', 'line', 'rectangle', 'ellipse']).default('pen'),

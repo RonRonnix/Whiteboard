@@ -206,7 +206,8 @@ export default function RoomPage() {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const isTextInput = target instanceof HTMLInputElement && ['text', 'search', 'email', 'password', 'url', 'tel', 'number'].includes(target.type)
+      if (isTextInput || target instanceof HTMLTextAreaElement || target?.isContentEditable) return
       if (!(event.ctrlKey || event.metaKey)) return
       if (event.key.toLowerCase() === 'z') {
         event.preventDefault()
