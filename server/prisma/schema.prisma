@@ -30,6 +30,8 @@ model User {
   createdRooms    SessionRoom[]       @relation("RoomCreator")
   roomMemberships SessionRoomMember[]
   verifications   EmailVerification[]
+  whiteboardStrokes WhiteboardStroke[]
+  roomMessages    RoomMessage[]
 }
 
 model SessionRoom {
@@ -43,8 +45,69 @@ model SessionRoom {
 
   createdBy User              @relation("RoomCreator", fields: [createdById], references: [id], onDelete: Cascade)
   members   SessionRoomMember[]
+  board     WhiteboardDocument?
+  messages  RoomMessage[]
+  strokes   WhiteboardStroke[]
 
   @@index([createdById])
+}
+
+model WhiteboardDocument {
+  roomId    String   @id
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  room      SessionRoom          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  snapshots WhiteboardSnapshot[]
+}
+
+model WhiteboardStroke {
+  id                String   @id @default(cuid())
+  roomId            String
+  userId            String
+  clientId          String
+  boardVersion      Int
+  color             String
+  size              Float
+  tool              String   @default("pen")
+  points            Json
+  createdAt         DateTime @default(now())
+  undoneAt          DateTime?
+  redoInvalidatedAt DateTime?
+
+  room SessionRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, clientId])
+  @@index([roomId, boardVersion, createdAt])
+  @@index([roomId, userId, undoneAt])
+}
+
+model RoomMessage {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  room SessionRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+}
+
+model WhiteboardSnapshot {
+  id             String   @id @default(cuid())
+  roomId         String
+  boardVersion   Int
+  operationCount Int
+  state          Json
+  createdAt      DateTime @default(now())
+
+  document WhiteboardDocument @relation(fields: [roomId], references: [roomId], onDelete: Cascade)
+
+  @@index([roomId, boardVersion, createdAt])
 }
 
 model SessionRoomMember {
