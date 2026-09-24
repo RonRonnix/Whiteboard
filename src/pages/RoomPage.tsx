@@ -7,11 +7,13 @@ import WhiteboardCanvas from '../components/WhiteboardCanvas'
 import type { RoomMember, RoomRole, SessionRoom } from '../types'
 import type {
   ChatMessage,
+  ChatSaveResult,
   ClientToServerEvents,
   CursorState,
   NewStroke,
   ParticipantPresence,
   ServerToClientEvents,
+  StrokeSaveResult,
   WhiteboardStroke,
 } from '../types/realtime'
 
@@ -30,6 +32,7 @@ export default function RoomPage() {
   const [roomInfo, setRoomInfo] = useState<SessionRoom | null>(null)
   const [roomInfoError, setRoomInfoError] = useState<string | null>(null)
   const [strokes, setStrokes] = useState<WhiteboardStroke[]>([])
+  const [previewStrokes, setPreviewStrokes] = useState<WhiteboardStroke[]>([])
   const [undoState, setUndoState] = useState({ canUndo: false, canRedo: false })
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
@@ -120,12 +123,13 @@ export default function RoomPage() {
     })
 
     socket.on('chat:message', (message) => {
-      setChatMessages((prev) => [...prev.slice(-49), message])
+      setChatMessages((prev) => prev.some((item) => item.id === message.id) ? prev : [...prev.slice(-49), message])
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     })
 
     socket.on('whiteboard:stroke', ({ roomId: incomingRoomId, stroke }) => {
       if (incomingRoomId !== roomId) return
+      setPreviewStrokes((previous) => previous.filter((item) => item.clientId !== stroke.clientId))
       setStrokes((prev) => {
         if (stroke.clientId) {
           const existingIndex = prev.findIndex((item) => item.clientId === stroke.clientId)
@@ -137,6 +141,28 @@ export default function RoomPage() {
         }
         return [...prev, stroke]
       })
+    })
+
+    socket.on('whiteboard:preview', ({ roomId: incomingRoomId, userId, displayName, stroke }) => {
+      if (incomingRoomId !== roomId || userId === currentUserId) return
+      const preview: WhiteboardStroke = {
+        id: `preview-${stroke.clientId}`,
+        clientId: stroke.clientId,
+        roomId: incomingRoomId,
+        userId,
+        displayName,
+        color: stroke.color,
+        size: stroke.size,
+        tool: stroke.tool,
+        points: stroke.points,
+        timestamp: new Date().toISOString(),
+      }
+      setPreviewStrokes((previous) => [...previous.filter((item) => item.clientId !== stroke.clientId), preview])
+    })
+
+    socket.on('whiteboard:preview:clear', ({ roomId: incomingRoomId, clientId }) => {
+      if (incomingRoomId !== roomId) return
+      setPreviewStrokes((previous) => previous.filter((item) => item.clientId !== clientId))
     })
 
     socket.on('whiteboard:stroke:removed', ({ roomId: incomingRoomId, strokeId }) => {
@@ -158,12 +184,32 @@ export default function RoomPage() {
       socket.emit('session:leave', { roomId })
       socket.disconnect()
     }
-  }, [roomId, token, currentUser])
+  }, [roomId, token, currentUser, currentUserId])
+
+  const createClientId = () => crypto.randomUUID()
+
+  const emitWithRetry = <TResult,>(event: 'whiteboard:stroke' | 'chat:message', payload: unknown, onResult: (result: TResult) => void, attempt = 0) => {
+    const socket = socketRef.current
+    if (!socket) return
+    const acknowledgedSocket = socket.timeout(5000) as unknown as {
+      emit: (eventName: string, eventPayload: unknown, callback: (timeoutError: Error | null, result?: TResult) => void) => void
+    }
+    acknowledgedSocket.emit(event, payload, (timeoutError, result) => {
+      if (timeoutError && attempt < 2) {
+        window.setTimeout(() => emitWithRetry(event, payload, onResult, attempt + 1), 500 * (attempt + 1))
+        return
+      }
+      onResult((timeoutError ? { ok: false, message: 'Connection timed out. Please try again.' } : result) as TResult)
+    })
+  }
 
   const handleSendMessage = () => {
     const trimmed = chatInput.trim()
     if (!trimmed || !socketRef.current || !roomId) return
-    socketRef.current.emit('chat:message', { roomId, content: trimmed })
+    const clientId = createClientId()
+    emitWithRetry<ChatSaveResult>('chat:message', { roomId, content: trimmed, clientId }, (result) => {
+      if (!result.ok) setError(result.message)
+    })
     setChatInput('')
   }
 
@@ -189,7 +235,18 @@ export default function RoomPage() {
     }
 
     setStrokes((prev) => [...prev, optimisticStroke])
-    socketRef.current.emit('whiteboard:stroke', { roomId, stroke: clonedStroke })
+    setPreviewStrokes((previous) => previous.filter((item) => item.clientId !== clonedStroke.clientId))
+    emitWithRetry<StrokeSaveResult>('whiteboard:stroke', { roomId, stroke: clonedStroke }, (result) => {
+      if (!result.ok) {
+        setStrokes((previous) => previous.filter((item) => item.clientId !== clonedStroke.clientId))
+        setError(result.message)
+      }
+    })
+  }
+
+  const handleStrokePreview = (stroke: NewStroke) => {
+    if (!roomId || !socketRef.current) return
+    socketRef.current.emit('whiteboard:preview', { roomId, stroke })
   }
 
   const handleUndo = useCallback(() => {
@@ -409,8 +466,9 @@ export default function RoomPage() {
             <div className="flex flex-1">
               <WhiteboardCanvas
                 className="flex-1"
-                strokes={strokes}
+                strokes={[...strokes, ...previewStrokes]}
                 onStrokeComplete={handleStrokeComplete}
+                onStrokePreview={handleStrokePreview}
                 disabled={status !== 'connected'}
                 canDraw={canDraw}
               />

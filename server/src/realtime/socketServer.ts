@@ -12,7 +12,7 @@ const MAX_CHAT_HISTORY = 50
 const SNAPSHOT_INTERVAL = 50
 const roomIdSchema = z.string().min(1).max(100)
 const cursorSchema = z.object({ x: z.number().finite().min(-100000).max(100000), y: z.number().finite().min(-100000).max(100000), tool: z.string().max(30).optional() })
-const chatSchema = z.object({ roomId: roomIdSchema, content: z.string().trim().min(1).max(2000) })
+const chatSchema = z.object({ roomId: roomIdSchema, content: z.string().trim().min(1).max(2000), clientId: z.string().min(1).max(100) })
 const strokeSchema = z.object({
   roomId: roomIdSchema,
   stroke: z.object({
@@ -154,23 +154,37 @@ export function createSocketServer(httpServer: HttpServer) {
       socket.to(roomId).emit('session:cursor', { roomId, userId: user.id, cursor: parsed.data })
     })
 
-    socket.on('chat:message', async (payload) => {
+    socket.on('chat:message', async (payload, acknowledge) => {
       const parsed = chatSchema.safeParse(payload)
-      if (!parsed.success || !socket.data.rooms?.has(parsed.data.roomId)) return
+      if (!parsed.success || !socket.data.rooms?.has(parsed.data.roomId)) return acknowledge({ ok: false, message: 'Invalid chat message.' })
       try {
-        const message = await prisma.roomMessage.create({ data: { roomId: parsed.data.roomId, userId: user.id, content: parsed.data.content }, include: { user: { select: { displayName: true } } } })
-        io.to(parsed.data.roomId).emit('chat:message', serializeMessage(message))
-      } catch { socket.emit('session:error', { roomId: parsed.data.roomId, message: 'Unable to save message.' }) }
+        const message = await prisma.roomMessage.upsert({
+          where: { roomId_clientId: { roomId: parsed.data.roomId, clientId: parsed.data.clientId } },
+          create: { roomId: parsed.data.roomId, userId: user.id, content: parsed.data.content, clientId: parsed.data.clientId },
+          update: {}, include: { user: { select: { displayName: true } } },
+        })
+        const serialized = serializeMessage(message)
+        io.to(parsed.data.roomId).emit('chat:message', serialized)
+        acknowledge({ ok: true, message: serialized })
+      } catch { acknowledge({ ok: false, message: 'Unable to save message.' }) }
     })
 
-    socket.on('whiteboard:stroke', async (payload) => {
+    socket.on('whiteboard:preview', async (payload) => {
       const parsed = strokeSchema.safeParse(payload)
-      if (!parsed.success || !socket.data.rooms?.has(parsed.data.roomId)) return
+      if (!parsed.success || !socket.data.rooms?.has(parsed.data.roomId) || !roomParticipants.get(parsed.data.roomId)?.has(user.id)) return
+      const role = await getRoomRole(parsed.data.roomId, user.id)
+      if (role !== 'owner' && role !== 'editor') return
+      socket.to(parsed.data.roomId).emit('whiteboard:preview', { roomId: parsed.data.roomId, userId: user.id, displayName: user.displayName, stroke: parsed.data.stroke })
+    })
+
+    socket.on('whiteboard:stroke', async (payload, acknowledge) => {
+      const parsed = strokeSchema.safeParse(payload)
+      if (!parsed.success || !socket.data.rooms?.has(parsed.data.roomId)) return acknowledge({ ok: false, message: 'Invalid board operation.' })
       const { roomId, stroke } = parsed.data
-      if (!roomParticipants.get(roomId)?.has(user.id)) return
+      if (!roomParticipants.get(roomId)?.has(user.id)) return acknowledge({ ok: false, message: 'Room access is required.' })
       try {
         const role = await getRoomRole(roomId, user.id)
-        if (role !== 'owner' && role !== 'editor') return socket.emit('session:error', { roomId, message: 'Your viewer role cannot draw on this board.' })
+        if (role !== 'owner' && role !== 'editor') return acknowledge({ ok: false, message: 'Your viewer role cannot draw on this board.' })
         const document = await getDocument(roomId)
         const now = new Date()
         await prisma.whiteboardStroke.updateMany({ where: { roomId, userId: user.id, boardVersion: document.version, undoneAt: { not: null }, redoInvalidatedAt: null }, data: { redoInvalidatedAt: now } })
@@ -180,10 +194,12 @@ export function createSocketServer(httpServer: HttpServer) {
           update: {}, include: { user: { select: { displayName: true } } },
         })
         const fullStroke = serializeStroke(saved)
+        io.to(roomId).emit('whiteboard:preview:clear', { roomId, clientId: stroke.clientId })
         io.to(roomId).emit('whiteboard:stroke', { roomId, stroke: fullStroke })
+        acknowledge({ ok: true, stroke: fullStroke })
         socket.emit('whiteboard:undo-state', { roomId, canUndo: true, canRedo: false })
         await maybeSaveSnapshot(roomId, document.version)
-      } catch { socket.emit('session:error', { roomId, message: 'Unable to save stroke.' }) }
+      } catch { acknowledge({ ok: false, message: 'Unable to save stroke.' }) }
     })
 
     socket.on('whiteboard:undo', async ({ roomId }) => {

@@ -49,12 +49,21 @@ export type ChatMessage = {
   timestamp: string
 }
 
+export type StrokeSaveResult =
+  | { ok: true; stroke: WhiteboardStroke }
+  | { ok: false; message: string }
+
+export type ChatSaveResult =
+  | { ok: true; message: ChatMessage }
+  | { ok: false; message: string }
+
 export type ClientToServerEvents = {
   'session:join': (payload: { roomId: string }) => void
   'session:leave': (payload: { roomId: string }) => void
   'session:cursor': (payload: { roomId: string; cursor: CursorState }) => void
-  'chat:message': (payload: { roomId: string; content: string }) => void
-  'whiteboard:stroke': (payload: { roomId: string; stroke: NewStroke }) => void
+  'chat:message': (payload: { roomId: string; content: string; clientId: string }, acknowledge: (result: ChatSaveResult) => void) => void
+  'whiteboard:stroke': (payload: { roomId: string; stroke: NewStroke }, acknowledge: (result: StrokeSaveResult) => void) => void
+  'whiteboard:preview': (payload: { roomId: string; stroke: NewStroke }) => void
   'whiteboard:undo': (payload: { roomId: string }) => void
   'whiteboard:redo': (payload: { roomId: string }) => void
 }
@@ -72,6 +81,8 @@ export type ServerToClientEvents = {
   'session:cursor': (payload: { roomId: string; userId: string; cursor: CursorState }) => void
   'chat:message': (message: ChatMessage) => void
   'whiteboard:stroke': (payload: { roomId: string; stroke: WhiteboardStroke }) => void
+  'whiteboard:preview': (payload: { roomId: string; userId: string; displayName: string; stroke: NewStroke }) => void
+  'whiteboard:preview:clear': (payload: { roomId: string; clientId: string }) => void
   'whiteboard:stroke:removed': (payload: { roomId: string; strokeId: string }) => void
   'whiteboard:undo-state': (payload: { roomId: string; canUndo: boolean; canRedo: boolean }) => void
   'session:error': (payload: { roomId?: string; message: string }) => void

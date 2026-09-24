@@ -69,3 +69,7 @@ npm run build
 Rooms have a persistent board document in PostgreSQL. Completed strokes, eraser operations, undo/redo state, and chat messages are saved before they are sent to the room, so they survive refreshes, empty rooms, and server restarts. Presence and cursors intentionally remain in memory because they describe only currently connected users.
 
 Every 50 board operations the server creates a JSON snapshot of the active board; an undo or redo also materializes a fresh snapshot. When someone joins, the server restores the newest snapshot and applies later active operations, rather than relying on the server process memory.
+
+## Live collaboration behavior
+
+While an editor is drawing, the browser broadcasts temporary preview updates at most every 40ms. They are visible immediately to other connected collaborators but are never stored. On release, the final stroke is saved to PostgreSQL, then broadcast as the confirmed board operation. Confirmed strokes and chat messages use Socket.IO acknowledgements with up to two safe retries; client IDs make those retries idempotent, so a timeout cannot create duplicates.

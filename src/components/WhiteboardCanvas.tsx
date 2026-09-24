@@ -56,12 +56,13 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: { points: Point[]; co
 type WhiteboardCanvasProps = {
   strokes: WhiteboardStroke[]
   onStrokeComplete: (stroke: NewStroke) => void
+  onStrokePreview: (stroke: NewStroke) => void
   disabled?: boolean
   canDraw?: boolean
   className?: string
 }
 
-export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled = false, canDraw = true, className }: WhiteboardCanvasProps) {
+export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePreview, disabled = false, canDraw = true, className }: WhiteboardCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
@@ -77,6 +78,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
   const drawingRef = useRef(false)
   const liveStrokeRef = useRef<NewStroke | null>(null)
   const devicePixelRatioRef = useRef(1)
+  const lastPreviewAtRef = useRef(0)
 
   const clampCameraOffset = useCallback((offset: { x: number; y: number }, targetZoom: number) => {
     const host = canvasHostRef.current
@@ -188,6 +190,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
     event.currentTarget.focus({ preventScroll: true })
     event.currentTarget.setPointerCapture(event.pointerId)
     drawingRef.current = true
+    lastPreviewAtRef.current = 0
     const clientId = createClientId()
     liveStrokeRef.current = {
       clientId,
@@ -218,6 +221,11 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
     if (!drawingRef.current || !liveStrokeRef.current) return
     event.preventDefault()
     liveStrokeRef.current.points.push(point)
+    const now = performance.now()
+    if (now - lastPreviewAtRef.current >= 40) {
+      lastPreviewAtRef.current = now
+      onStrokePreview({ ...liveStrokeRef.current, points: liveStrokeRef.current.points.map((item) => ({ ...item })) })
+    }
     redraw()
   }
 
