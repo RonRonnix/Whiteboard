@@ -64,6 +64,8 @@ Set-Location server
 npm run build
 ```
 
-## Current scope
+## Collaboration persistence
 
-Room identities, memberships, roles, and invite controls are persisted. Live cursors, chat, and whiteboard strokes are currently in server memory, so they reset when the server restarts. Persisting those collaboration records is the next planned phase.
+Rooms have a persistent board document in PostgreSQL. Completed strokes, eraser operations, undo/redo state, and chat messages are saved before they are sent to the room, so they survive refreshes, empty rooms, and server restarts. Presence and cursors intentionally remain in memory because they describe only currently connected users.
+
+Every 50 board operations the server creates a JSON snapshot of the active board; an undo or redo also materializes a fresh snapshot. When someone joins, the server restores the newest snapshot and applies later active operations, rather than relying on the server process memory.

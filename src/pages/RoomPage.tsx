@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { io, type Socket } from 'socket.io-client'
 import { API_BASE_URL, fetchRoomMembers, fetchSessionRoom, revokeRoomInvite, rotateRoomInvite, updateRoomInvite, updateRoomMemberRole } from '../lib/api'
 import { useAuthStore, type AuthState } from '../store/authStore'
@@ -18,7 +18,6 @@ import type {
 export default function RoomPage() {
   const { roomId: rawRoomId } = useParams<{ roomId: string }>()
   const roomId = rawRoomId ?? ''
-  const navigate = useNavigate()
   const token = useAuthStore((state: AuthState) => state.token)
   const currentUser = useAuthStore((state: AuthState) => state.user)
   const currentUserId = currentUser?.id
@@ -293,11 +292,16 @@ export default function RoomPage() {
   }, [status, handleCursorUpdate])
 
   const leaveRoom = () => {
-    navigate('/')
+    if (socketRef.current && roomId) {
+      socketRef.current.emit('session:leave', { roomId })
+      socketRef.current.disconnect()
+      socketRef.current = null
+    }
+    window.location.assign('/')
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top,_#083344_0%,_#06111d_42%,_#020617_100%)] text-slate-50">
+    <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top,#083344_0%,#06111d_42%,#020617_100%)] text-slate-50">
       <header className="flex items-center justify-between border-b border-cyan-950/80 bg-slate-950/65 px-6 py-4 backdrop-blur">
         <div className="px-6">
           <p className="text-xs uppercase tracking-[0.4em] text-cyan-300">Shared session</p>
@@ -308,8 +312,9 @@ export default function RoomPage() {
           </p>
         </div>
         <button
+          type="button"
           onClick={leaveRoom}
-          className="mr-6 rounded-xl border border-cyan-900 bg-slate-950/50 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500 hover:text-cyan-100"
+          className="cursor-pointer mr-6 rounded-xl border border-cyan-900 bg-slate-950/50 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500 hover:text-cyan-100"
         >
           Leave room
         </button>
@@ -406,7 +411,8 @@ export default function RoomPage() {
                 className="flex-1"
                 strokes={strokes}
                 onStrokeComplete={handleStrokeComplete}
-                disabled={status !== 'connected' || !canDraw}
+                disabled={status !== 'connected'}
+                canDraw={canDraw}
               />
             </div>
             <div className="rounded-2xl border border-cyan-950/80 bg-slate-950/55 lg:w-80 xl:w-96">

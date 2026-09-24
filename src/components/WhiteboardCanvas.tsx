@@ -57,10 +57,11 @@ type WhiteboardCanvasProps = {
   strokes: WhiteboardStroke[]
   onStrokeComplete: (stroke: NewStroke) => void
   disabled?: boolean
+  canDraw?: boolean
   className?: string
 }
 
-export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled = false, className }: WhiteboardCanvasProps) {
+export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled = false, canDraw = true, className }: WhiteboardCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
@@ -171,7 +172,6 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
   }
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled) return
     event.preventDefault()
     if (event.button === 2) {
       panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
@@ -180,6 +180,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
       return
     }
     if (event.button !== 0) return
+    if (disabled || !canDraw) return
     const point = getPointFromEvent(event)
     if (!point) return
     const cursorPosition = getCursorPosition(event)
@@ -253,7 +254,6 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
   const hideCursor = () => setCursor((current) => ({ ...current, visible: false }))
 
   const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
-    if (disabled) return
     event.preventDefault()
     const rect = event.currentTarget.getBoundingClientRect()
     const pointerX = event.clientX - rect.left
@@ -335,7 +335,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
       <div ref={canvasHostRef} className="relative min-h-0 flex-1 overflow-hidden">
         <canvas
           ref={canvasRef}
-          className={`absolute inset-0 block h-full w-full touch-none ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-none'}`}
+          className={`absolute inset-0 block h-full w-full touch-none ${disabled ? 'cursor-not-allowed opacity-60' : canDraw ? 'cursor-none' : 'cursor-grab'}`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -349,7 +349,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, disabled =
           }}
           tabIndex={0}
         />
-        {!disabled && cursor.visible && (
+        {!disabled && canDraw && cursor.visible && (
           <div
             aria-hidden="true"
             className={`pointer-events-none absolute rounded-full ${tool === 'eraser' ? 'border border-slate-100 bg-slate-100/15' : 'border border-white/90 bg-white/10'}`}
