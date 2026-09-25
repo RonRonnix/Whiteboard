@@ -4,6 +4,7 @@ import { io, type Socket } from 'socket.io-client'
 import { API_BASE_URL, fetchRoomMembers, fetchSessionRoom, revokeRoomInvite, rotateRoomInvite, updateRoomInvite, updateRoomMemberRole } from '../lib/api'
 import { useAuthStore, type AuthState } from '../store/authStore'
 import WhiteboardCanvas from '../components/WhiteboardCanvas'
+import ConfirmationDialog from '../components/ConfirmationDialog'
 import type { RoomMember, RoomRole, SessionRoom } from '../types'
 import type {
   ChatMessage,
@@ -16,6 +17,8 @@ import type {
   StrokeSaveResult,
   WhiteboardStroke,
 } from '../types/realtime'
+
+type PendingConfirmation = { title: string; description: string; confirmLabel: string; tone?: 'primary' | 'danger'; action: () => void | Promise<void> }
 
 export default function RoomPage() {
   const { roomId: rawRoomId } = useParams<{ roomId: string }>()
@@ -37,6 +40,7 @@ export default function RoomPage() {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const [copiedCode, setCopiedCode] = useState(false)
+  const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
 
   const roomLabel = useMemo(() => roomId?.slice(0, 6).toUpperCase() ?? 'ROOM', [roomId])
   const currentMember = members.find((member) => member.userId === currentUserId)
@@ -357,6 +361,18 @@ export default function RoomPage() {
     window.location.assign('/')
   }
 
+  const confirmRoleChange = (member: RoomMember, role: Exclude<RoomRole, 'owner'>) => {
+    const isPromotion = role === 'editor'
+    setConfirmation({
+      title: isPromotion ? 'Make this member an editor?' : 'Make this member a viewer?',
+      description: isPromotion
+        ? `${member.user.displayName} (${member.user.email}) will be able to draw and edit this board.`
+        : `${member.user.displayName} (${member.user.email}) will no longer be able to edit the board.`,
+      confirmLabel: isPromotion ? 'Make editor' : 'Make viewer',
+      action: () => handleRoleChange(member, role),
+    })
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top,#083344_0%,#06111d_42%,#020617_100%)] text-slate-50">
       <header className="flex items-center justify-between border-b border-cyan-950/80 bg-slate-950/65 px-6 py-4 backdrop-blur">
@@ -370,7 +386,7 @@ export default function RoomPage() {
         </div>
         <button
           type="button"
-          onClick={leaveRoom}
+          onClick={() => setConfirmation({ title: 'Leave this room?', description: 'You will return to your shared workspace. Your board work and messages are already saved.', confirmLabel: 'Leave room', action: leaveRoom })}
           className="cursor-pointer mr-6 rounded-xl border border-cyan-900 bg-slate-950/50 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500 hover:text-cyan-100"
         >
           Leave room
@@ -404,7 +420,7 @@ export default function RoomPage() {
                 <div className="mt-2 flex items-center justify-between gap-2 text-xs">
                   <span className="rounded-full border border-cyan-800 bg-cyan-950/50 px-2 py-1 uppercase tracking-wide text-cyan-100">{member.role}</span>
                   {isOwner && member.role !== 'owner' ? (
-                    <select value={member.role} onChange={(event) => handleRoleChange(member, event.target.value as Exclude<RoomRole, 'owner'>)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+                    <select value={member.role} onChange={(event) => confirmRoleChange(member, event.target.value as Exclude<RoomRole, 'owner'>)} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
                       <option value="viewer">Viewer</option>
                       <option value="editor">Editor</option>
                     </select>
@@ -453,10 +469,10 @@ export default function RoomPage() {
             </div>
             {isOwner && (
               <div className="flex flex-wrap gap-2 text-xs">
-                <button type="button" onClick={handleRotateInvite} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:border-indigo-400">Rotate code</button>
-                <button type="button" onClick={() => handleInviteExpiry(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString())} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:border-indigo-400">Expire in 24h</button>
-                <button type="button" onClick={() => handleInviteExpiry(null)} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:border-indigo-400">No expiry</button>
-                <button type="button" onClick={handleRevokeInvite} className="rounded-lg border border-rose-500/60 px-3 py-2 text-rose-200 hover:border-rose-400">Revoke</button>
+                <button type="button" onClick={() => setConfirmation({ title: 'Rotate the invite code?', description: 'The current code will immediately stop admitting new members. Existing members keep access.', confirmLabel: 'Rotate code', action: handleRotateInvite })} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:border-indigo-400">Rotate code</button>
+                <button type="button" onClick={() => setConfirmation({ title: 'Set a 24-hour invite expiry?', description: 'New members can use this code for the next 24 hours only.', confirmLabel: 'Set expiry', action: () => handleInviteExpiry(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()) })} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:border-indigo-400">Expire in 24h</button>
+                <button type="button" onClick={() => setConfirmation({ title: 'Remove invite expiry?', description: 'The current invite code will remain active until you revoke or rotate it.', confirmLabel: 'Remove expiry', action: () => handleInviteExpiry(null) })} className="rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:border-indigo-400">No expiry</button>
+                <button type="button" onClick={() => setConfirmation({ title: 'Revoke this invite code?', description: 'No new user can join with this code. Existing members will keep access.', confirmLabel: 'Revoke invite', tone: 'danger', action: handleRevokeInvite })} className="rounded-lg border border-rose-500/60 px-3 py-2 text-rose-200 hover:border-rose-400">Revoke</button>
               </div>
             )}
           </div>
@@ -523,6 +539,7 @@ export default function RoomPage() {
           </div>
         </section>
       </main>
+      {confirmation && <ConfirmationDialog open title={confirmation.title} description={confirmation.description} confirmLabel={confirmation.confirmLabel} tone={confirmation.tone} onConfirm={confirmation.action} onClose={() => setConfirmation(null)} />}
     </div>
   )
 }

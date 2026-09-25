@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { createSessionRoom, fetchSessionRooms, joinSessionRoom, logoutRequest } from '../lib/api'
 import type { SessionRoom } from '../types'
 import { useAuthStore, type AuthState } from '../store/authStore'
+import ConfirmationDialog from '../components/ConfirmationDialog'
+
+type PendingConfirmation = { title: string; description: string; confirmLabel: string; action: () => Promise<void> }
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -16,6 +19,7 @@ export default function HomePage() {
   const [creating, setCreating] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
+  const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
 
   const handleLogout = async () => {
     try {
@@ -52,9 +56,7 @@ export default function HomePage() {
     }
   }, [])
 
-  const handleCreateRoom = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!title.trim()) return
+  const createRoom = async () => {
 
     setCreating(true)
     setError(null)
@@ -70,10 +72,8 @@ export default function HomePage() {
     }
   }
 
-  const handleJoinRoom = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const trimmed = joinCode.trim().toUpperCase()
-    if (!trimmed) return
+  const joinRoom = async (inviteCode = joinCode.trim().toUpperCase()) => {
+    const trimmed = inviteCode
 
     setJoining(true)
     setError(null)
@@ -87,6 +87,20 @@ export default function HomePage() {
     } finally {
       setJoining(false)
     }
+  }
+
+  const handleCreateRoom = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const roomTitle = title.trim()
+    if (!roomTitle) return
+    setConfirmation({ title: 'Create this room?', description: `A new shared workspace named “${roomTitle}” will be created. You will be its owner.`, confirmLabel: 'Create room', action: createRoom })
+  }
+
+  const handleJoinRoom = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const inviteCode = joinCode.trim().toUpperCase()
+    if (!inviteCode) return
+    setConfirmation({ title: 'Join this room?', description: `You will join the room using invite code ${inviteCode}.`, confirmLabel: 'Join room', action: () => joinRoom(inviteCode) })
   }
 
   return (
@@ -191,12 +205,13 @@ export default function HomePage() {
                         <p className="text-xs text-slate-400">Invite code</p>
                         <p className="text-lg font-mono font-semibold text-cyan-200">{room.inviteCode}</p>
                       </div>
-                      <Link
-                        to={`/rooms/${room.id}`}
-                        className="rounded-xl border border-cyan-500/60 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white"
+                      <button
+                        type="button"
+                        onClick={() => setConfirmation({ title: 'Enter this room?', description: `Open “${room.title}” and join its live collaboration session.`, confirmLabel: 'Enter room', action: async () => { navigate(`/rooms/${room.id}`) } })}
+                        className="cursor-pointer rounded-xl border border-cyan-500/60 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-white"
                       >
                         Enter room
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </li>
@@ -207,6 +222,7 @@ export default function HomePage() {
           {error && <p className="mt-4 rounded-lg bg-red-900/30 px-3 py-2 text-sm text-red-200">{error}</p>}
         </section>
       </main>
+      {confirmation && <ConfirmationDialog open title={confirmation.title} description={confirmation.description} confirmLabel={confirmation.confirmLabel} onConfirm={confirmation.action} onClose={() => setConfirmation(null)} />}
     </div>
   )
 }
