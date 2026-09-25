@@ -126,12 +126,14 @@ export default function HomePage() {
 
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10">
         <section className="rounded-2xl border border-cyan-950/80 bg-slate-950/50 p-6 shadow-lg shadow-cyan-950/30 backdrop-blur-sm">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Create a session room</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Spin up a private whiteboard room and share the invite code.
-              </p>
+          <div className="grid items-stretch gap-6 lg:grid-cols-2">
+            <div className="rounded-2xl border border-cyan-900/70 bg-cyan-950/15 p-5">
+              <div className="min-h-18">
+                <h2 className="text-lg font-semibold text-white">Create a session room</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Spin up a private whiteboard room and share the invite code.
+                </p>
+              </div>
               <form className="mt-5 flex flex-col gap-4" onSubmit={handleCreateRoom}>
                 <input
                   type="text"
@@ -145,15 +147,17 @@ export default function HomePage() {
                 <button
                   type="submit"
                   disabled={creating}
-                  className="cursor-pointer rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-slate-950 shadow-lg shadow-emerald-950/30 transition hover:from-cyan-400 hover:to-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="cursor-pointer rounded-xl border border-cyan-500/70 bg-cyan-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-400/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {creating ? 'Creating…' : 'Create room'}
                 </button>
               </form>
             </div>
             <div className="rounded-2xl border border-dashed border-emerald-800/70 bg-emerald-950/15 p-5">
-              <h2 className="text-lg font-semibold text-white">Join by invite code</h2>
-              <p className="mt-1 text-sm text-slate-400">Enter the 8-character code you received to hop into an existing room.</p>
+              <div className="min-h-18">
+                <h2 className="text-lg font-semibold text-white">Join by invite code</h2>
+                <p className="mt-1 text-sm text-slate-400">Enter the 8-character code you received to hop into an existing room.</p>
+              </div>
               <form className="mt-5 flex flex-col gap-4" onSubmit={handleJoinRoom}>
                 <input
                   type="text"
@@ -194,7 +198,7 @@ export default function HomePage() {
           ) : (
             <ul className="mt-6 space-y-4">
               {rooms.map((room) => (
-                <li key={room.id} className="rounded-xl border border-cyan-950/80 bg-slate-950/65 p-4 transition hover:border-cyan-700">
+                <li key={room.id} className="rounded-xl border border-cyan-950/80 bg-slate-950/65 p-4 transition">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-base font-semibold text-white">{room.title}</p>
