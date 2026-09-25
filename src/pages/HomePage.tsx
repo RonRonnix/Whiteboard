@@ -21,6 +21,8 @@ export default function HomePage() {
   const [joining, setJoining] = useState(false)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
 
+  const formatInviteCode = (inviteCode: string) => inviteCode.match(/.{1,4}/g)?.join('-') ?? inviteCode
+
   const handleLogout = async () => {
     try {
       await logoutRequest()
@@ -104,8 +106,8 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#083344_0%,_#06111d_42%,_#020617_100%)] text-slate-50">
-      <header className="border-b border-cyan-950/80 bg-slate-950/65 px-6 py-4 backdrop-blur">
+    <div className="min-h-screen bg-transparent text-slate-50">
+      <header className="border-b border-slate-800/90 bg-[#070c14]/80 px-6 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.4em] text-cyan-300">Whiteboard Lab</p>
@@ -124,11 +126,11 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10">
-        <section className="rounded-2xl border border-cyan-950/80 bg-slate-950/50 p-6 shadow-lg shadow-cyan-950/30 backdrop-blur-sm">
+      <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-14">
+        <section>
           <div className="grid items-stretch gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-cyan-900/70 bg-cyan-950/15 p-5">
-              <div className="min-h-18">
+            <div className="rounded-2xl border border-slate-700/70 bg-[#0c1520]/95 p-7 shadow-xl shadow-black/30 backdrop-blur-sm">
+              <div className="min-h-[4.5rem]">
                 <h2 className="text-lg font-semibold text-white">Create a session room</h2>
                 <p className="mt-1 text-sm text-slate-400">
                   Spin up a private whiteboard room and share the invite code.
@@ -140,21 +142,21 @@ export default function HomePage() {
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="Sprint planning with Design"
-                  className="w-full rounded-xl border border-cyan-900 bg-slate-950/70 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/25"
+                  className="w-full rounded-xl border border-slate-700 bg-[#070e17] px-4 py-3 text-base text-white shadow-inner shadow-black/25 outline-none transition focus:border-teal-300 focus:ring-2 focus:ring-teal-400/25"
                   required
                   minLength={3}
                 />
                 <button
                   type="submit"
                   disabled={creating}
-                  className="cursor-pointer rounded-xl border border-cyan-500/70 bg-cyan-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300 hover:bg-cyan-400/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className="cursor-pointer rounded-xl bg-teal-400 px-6 py-3 text-sm font-bold uppercase tracking-wide text-slate-950 shadow-[0_0_26px_rgba(45,212,191,0.35)] transition hover:bg-teal-300 hover:shadow-[0_0_32px_rgba(45,212,191,0.5)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {creating ? 'Creating…' : 'Create room'}
                 </button>
               </form>
             </div>
-            <div className="rounded-2xl border border-dashed border-emerald-800/70 bg-emerald-950/15 p-5">
-              <div className="min-h-18">
+            <div className="rounded-2xl border border-slate-700/70 bg-[#0c1520]/95 p-7 shadow-xl shadow-black/30 backdrop-blur-sm">
+              <div className="min-h-[4.5rem]">
                 <h2 className="text-lg font-semibold text-white">Join by invite code</h2>
                 <p className="mt-1 text-sm text-slate-400">Enter the 8-character code you received to hop into an existing room.</p>
               </div>
@@ -164,14 +166,14 @@ export default function HomePage() {
                   value={joinCode}
                   onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
                   placeholder="e.g. 1A2B3C4D"
-                  className="w-full rounded-xl border border-cyan-900 bg-slate-950/70 px-4 py-3 text-base tracking-[0.3em] text-white outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/25"
+                  className="w-full rounded-xl border border-slate-700 bg-[#070e17] px-4 py-3 font-mono text-base tracking-[0.22em] text-white shadow-inner shadow-black/25 outline-none transition focus:border-teal-300 focus:ring-2 focus:ring-teal-400/25"
                   required
                   minLength={6}
                 />
                 <button
                   type="submit"
                   disabled={joining}
-                  className="cursor-pointer rounded-xl border border-emerald-500/70 bg-emerald-400/10 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300 hover:bg-emerald-400/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className="cursor-pointer rounded-xl border border-slate-700 bg-[#0a121d] px-6 py-3 text-sm font-semibold uppercase tracking-wide text-slate-300 transition hover:border-teal-400/60 hover:text-teal-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {joining ? 'Joining…' : 'Join room'}
                 </button>
@@ -180,13 +182,14 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-cyan-950/80 bg-slate-950/40 p-6 shadow-inner shadow-cyan-950/30">
+        <section className="rounded-2xl border border-slate-700/70 bg-[#0c1520]/95 p-7 shadow-xl shadow-black/30 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-white">Your session rooms</h2>
               <p className="text-sm text-slate-400">Invite-only workspaces you have created.</p>
             </div>
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-widest text-emerald-200">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/40 bg-teal-400/10 px-3 py-1 text-xs uppercase tracking-widest text-teal-200">
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-teal-300 shadow-[0_0_8px_rgba(94,234,212,0.95)]" />
               {rooms.length} active
             </span>
           </div>
@@ -198,16 +201,19 @@ export default function HomePage() {
           ) : (
             <ul className="mt-6 space-y-4">
               {rooms.map((room) => (
-                <li key={room.id} className="rounded-xl border border-cyan-950/80 bg-slate-950/65 p-4 transition">
+                <li key={room.id} className="rounded-xl border border-slate-800 bg-[#121d2a] p-4 transition hover:border-teal-500/40">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-white">{room.title}</p>
-                      <p className="text-xs uppercase tracking-[0.4em] text-slate-500">{new Date(room.createdAt).toLocaleString()}</p>
+                    <div className="flex items-center gap-3">
+                      <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-teal-400/35 bg-teal-400/10 font-mono text-sm text-teal-200">◇</span>
+                      <div>
+                        <p className="text-base font-semibold text-white">{room.title}</p>
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{new Date(room.createdAt).toLocaleString()}</p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <p className="text-xs text-slate-400">Invite code</p>
-                        <p className="text-lg font-mono font-semibold text-cyan-200">{room.inviteCode}</p>
+                        <p className="text-[0.65rem] uppercase tracking-[0.18em] text-slate-500">Invite code</p>
+                        <p className="font-mono text-sm font-semibold tracking-[0.08em] text-teal-200">{formatInviteCode(room.inviteCode)}</p>
                       </div>
                       <button
                         type="button"

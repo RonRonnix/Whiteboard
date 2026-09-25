@@ -374,7 +374,7 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top,#083344_0%,#06111d_42%,#020617_100%)] text-slate-50">
+    <div className="flex min-h-screen flex-col bg-transparent text-slate-50">
       <header className="flex items-center justify-between border-b border-cyan-950/80 bg-slate-950/65 px-6 py-4 backdrop-blur">
         <div className="px-6">
           <p className="text-xs uppercase tracking-[0.4em] text-cyan-300">Shared session</p>

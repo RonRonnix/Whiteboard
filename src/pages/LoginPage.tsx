@@ -106,8 +106,8 @@ export default function LoginPage() {
       : 'Sign in or create a free account to start collaborating in shared rooms.'
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_#083344_0%,_#06111d_44%,_#020617_100%)] px-4 py-12 text-slate-50">
-      <div className="w-full max-w-md space-y-6 rounded-2xl border border-cyan-950/80 bg-slate-950/60 p-8 shadow-2xl shadow-cyan-950/40 backdrop-blur-sm">
+    <main className="flex min-h-screen items-center justify-center bg-transparent px-4 py-12 text-slate-50">
+      <div className="w-full max-w-md space-y-6 rounded-2xl border border-slate-700/70 bg-[#0c1520]/95 p-8 shadow-2xl shadow-black/40 backdrop-blur-sm">
         <div className="space-y-2 text-center">
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Whiteboard Lab</p>
           <h1 className="text-3xl font-semibold text-white">{heading}</h1>
