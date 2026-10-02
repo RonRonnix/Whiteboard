@@ -101,20 +101,20 @@ function IconButton({ label, shortcut, active, disabled, onClick, children }: Ic
         aria-pressed={active}
         disabled={disabled}
         onClick={onClick}
-        className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] disabled:cursor-not-allowed disabled:opacity-35 ${
+        className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) disabled:cursor-not-allowed disabled:opacity-35 ${
           active
-            ? 'bg-[var(--accent)] text-[color:var(--accent-ink)]'
-            : 'text-[color:var(--muted)] hover:bg-[var(--surface-2)] hover:text-[color:var(--text)] disabled:hover:bg-transparent'
+            ? 'bg-(--accent) text-(--accent-ink)'
+            : 'text-(--muted) hover:bg-(--surface-2) hover:text-(--text) disabled:hover:bg-transparent'
         }`}
       >
         {children}
       </button>
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-md border border-[color:var(--border)] bg-[var(--surface-2)] px-2 py-1 text-xs text-[color:var(--text)] opacity-0 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-md border border-(--border) bg-(--surface-2) px-2 py-1 text-xs text-(--text) opacity-0 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
       >
         {label}
-        {shortcut && <kbd className="rounded bg-[var(--bg)] px-1.5 py-0.5 font-sans text-[11px] text-[color:var(--muted)]">{shortcut}</kbd>}
+        {shortcut && <kbd className="rounded bg-(--bg) px-1.5 py-0.5 font-sans text-[11px] text-(--muted)">{shortcut}</kbd>}
       </span>
     </div>
   )
@@ -436,7 +436,7 @@ export default function WhiteboardCanvas({
   const previewSize = Math.max(6, Math.min(brushSize, 22))
 
   return (
-    <div className={`relative h-full w-full overflow-hidden bg-[var(--workspace)] ${className ?? ''}`}>
+    <div className={`relative h-full w-full overflow-hidden bg-(--workspace) ${className ?? ''}`}>
       <div ref={canvasHostRef} className="absolute inset-0">
         <canvas
           ref={canvasRef}
@@ -473,20 +473,20 @@ export default function WhiteboardCanvas({
       </div>
 
       {canDraw && strokes.length === 0 && (
-        <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-[color:var(--muted)]">
+        <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-(--muted)">
           The board is empty. Pick a tool and start drawing.
         </p>
       )}
 
       {canDraw ? (
         <>
-          <div className="absolute left-4 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1 rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+          <div className="absolute left-4 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1 rounded-xl border border-(--border) bg-(--surface) p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
             {TOOLS.map(({ id, label, key, Icon }) => (
               <IconButton key={id} label={label} shortcut={key} active={tool === id} onClick={() => setTool(id)}>
                 <Icon size={18} strokeWidth={1.75} />
               </IconButton>
             ))}
-            <div className="my-1 h-px bg-[var(--border)]" />
+            <div className="my-1 h-px bg-(--border)" />
             <IconButton label="Undo" shortcut="Ctrl+Z" disabled={!canUndo} onClick={() => onUndo?.()}>
               <Undo2 size={18} strokeWidth={1.75} />
             </IconButton>
@@ -495,7 +495,7 @@ export default function WhiteboardCanvas({
             </IconButton>
           </div>
 
-          <div className="absolute bottom-4 left-1/2 z-10 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-4 overflow-x-auto rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+          <div className="absolute bottom-4 left-1/2 z-10 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-4 overflow-x-auto rounded-xl border border-(--border) bg-(--surface) px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
             <div className={`flex items-center gap-1.5 transition-opacity ${isEraser ? 'pointer-events-none opacity-35' : ''}`} role="group" aria-label="Stroke color">
               {COLORS.map((swatch) => (
                 <button
@@ -504,21 +504,21 @@ export default function WhiteboardCanvas({
                   aria-label={`Color ${swatch}`}
                   aria-pressed={color === swatch}
                   onClick={() => setColor(swatch)}
-                  className={`h-6 w-6 shrink-0 rounded-full ring-offset-2 ring-offset-[#151920] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] ${
+                  className={`h-6 w-6 shrink-0 rounded-full ring-offset-2 ring-offset-[#151920] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) ${
                     color === swatch ? 'ring-2 ring-white' : 'hover:scale-110'
                   }`}
                   style={{ backgroundColor: swatch }}
                 />
               ))}
               <label
-                className="relative h-6 w-6 shrink-0 cursor-pointer rounded-full transition hover:scale-110 focus-within:ring-2 focus-within:ring-[color:var(--accent)]"
+                className="relative h-6 w-6 shrink-0 cursor-pointer rounded-full transition hover:scale-110 focus-within:ring-2 focus-within:ring-(--accent)"
                 style={{ background: 'conic-gradient(#f87171, #facc15, #4ade80, #22d3ee, #818cf8, #e879f9, #f87171)' }}
                 title="Custom color"
               >
                 <input type="color" value={color} onChange={(event) => setColor(event.target.value)} aria-label="Custom stroke color" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
               </label>
             </div>
-            <div className="h-6 w-px shrink-0 bg-[var(--border)]" />
+            <div className="h-6 w-px shrink-0 bg-(--border)" />
             <div className="flex shrink-0 items-center gap-3">
               <span className="flex h-6 w-6 items-center justify-center" aria-hidden="true">
                 <span
@@ -534,26 +534,26 @@ export default function WhiteboardCanvas({
                 value={brushSize}
                 onChange={(event) => setBrushSize(Number(event.target.value))}
                 aria-label={isEraser ? 'Eraser size' : 'Brush size'}
-                className="w-28 accent-[var(--accent)]"
+                className="w-28 accent-(--accent)"
               />
-              <span className="w-9 text-right text-xs tabular-nums text-[color:var(--muted)]">{brushSize}px</span>
+              <span className="w-9 text-right text-xs tabular-nums text-(--muted)">{brushSize}px</span>
             </div>
           </div>
         </>
       ) : (
-        <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[color:var(--muted)] shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+        <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg border border-(--border) bg-(--surface) px-3 py-2 text-sm text-(--muted) shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
           <Eye size={16} strokeWidth={1.75} />
           View only. Ask the owner for edit access.
         </div>
       )}
 
-      <div className="absolute bottom-4 right-4 z-10 flex items-center rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+      <div className="absolute bottom-4 right-4 z-10 flex items-center rounded-xl border border-(--border) bg-(--surface) p-1 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
         <button
           type="button"
           aria-label="Zoom out"
           onClick={() => applyZoom(zoomRef.current - 0.1)}
           disabled={zoom <= MIN_ZOOM}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[color:var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] disabled:opacity-35"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-(--muted) transition-colors hover:bg-(--surface-2) hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) disabled:opacity-35"
         >
           <Minus size={16} strokeWidth={1.75} />
         </button>
@@ -561,7 +561,7 @@ export default function WhiteboardCanvas({
           type="button"
           onClick={resetView}
           title="Reset to 100%"
-          className="h-8 min-w-14 rounded-lg px-2 text-xs tabular-nums text-[color:var(--text)] transition-colors hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
+          className="h-8 min-w-14 rounded-lg px-2 text-xs tabular-nums text-(--text) transition-colors hover:bg-(--surface-2) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent)"
         >
           {Math.round(zoom * 100)}%
         </button>
@@ -570,7 +570,7 @@ export default function WhiteboardCanvas({
           aria-label="Zoom in"
           onClick={() => applyZoom(zoomRef.current + 0.1)}
           disabled={zoom >= MAX_ZOOM}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[color:var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] disabled:opacity-35"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-(--muted) transition-colors hover:bg-(--surface-2) hover:text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent) disabled:opacity-35"
         >
           <Plus size={16} strokeWidth={1.75} />
         </button>

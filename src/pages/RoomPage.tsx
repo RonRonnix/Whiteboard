@@ -38,6 +38,7 @@ const theme = {
 } as CSSProperties
 
 const AVATAR_HUES = [12, 38, 160, 190, 235, 270, 320]
+const MAX_CHAT_MESSAGES = 50
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -49,6 +50,10 @@ function avatarColor(name: string) {
   let hash = 0
   for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
   return `hsl(${AVATAR_HUES[hash % AVATAR_HUES.length]} 42% 38%)`
+}
+
+function keepLatestMessages(messages: ChatMessage[]) {
+  return messages.slice(-MAX_CHAT_MESSAGES)
 }
 
 function Avatar({ name, online, size = 28 }: { name: string; online?: boolean; size?: number }) {
@@ -63,7 +68,7 @@ function Avatar({ name, online, size = 28 }: { name: string; online?: boolean; s
       </span>
       {online !== undefined && (
         <span
-          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[color:var(--surface)] ${online ? 'bg-[var(--accent)]' : 'bg-slate-600'}`}
+          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-(--surface) ${online ? 'bg-(--accent)' : 'bg-slate-600'}`}
           title={online ? 'Online' : 'Offline'}
         />
       )}
@@ -101,18 +106,14 @@ export default function RoomPage() {
   const [unread, setUnread] = useState(0)
   const chatOpenRef = useRef(false)
 
-  const roomLabel = useMemo(() => roomId?.slice(0, 6).toUpperCase() ?? 'ROOM', [roomId])
+  const chatMessageIdsRef = useRef(new Set<string>())
+  const roomLabel = useMemo(() => roomId.slice(0, 6).toUpperCase() || 'ROOM', [roomId])
   const currentMember = members.find((member) => member.userId === currentUserId)
   const isOwner = currentMember?.role === 'owner'
   const canDraw = currentMember?.role === 'owner' || currentMember?.role === 'editor'
   const boardStrokes = useMemo(() => [...strokes, ...previewStrokes], [strokes, previewStrokes])
   const onlineIds = useMemo(() => new Set(participants.map((participant) => participant.userId)), [participants])
   const bannerError = error ?? roomInfoError
-
-  useEffect(() => {
-    chatOpenRef.current = chatOpen
-    if (chatOpen) setUnread(0)
-  }, [chatOpen])
 
   useEffect(() => {
     if (!roomId) return
@@ -162,7 +163,9 @@ export default function RoomPage() {
 
     socket.on('session:joined', ({ participants: initial, chatHistory, whiteboardStrokes }) => {
       setParticipants(initial)
-      setChatMessages(chatHistory)
+      const recentMessages = keepLatestMessages(chatHistory)
+      chatMessageIdsRef.current = new Set(recentMessages.map((message: ChatMessage) => message.id))
+      setChatMessages(recentMessages)
       setStrokes(whiteboardStrokes)
       setError(null)
     })
@@ -194,11 +197,14 @@ export default function RoomPage() {
     })
 
     socket.on('chat:message', (message) => {
-      setChatMessages((prev) => {
-        if (prev.some((item) => item.id === message.id)) return prev
-        if (!chatOpenRef.current) setUnread((count) => count + 1)
-        return [...prev.slice(-49), message]
+      if (chatMessageIdsRef.current.has(message.id)) return
+      chatMessageIdsRef.current.add(message.id)
+      setChatMessages((previous) => {
+        const nextMessages = keepLatestMessages([...previous, message])
+        chatMessageIdsRef.current = new Set(nextMessages.map((item) => item.id))
+        return nextMessages
       })
+      if (!chatOpenRef.current) setUnread((count) => count + 1)
     })
 
     socket.on('whiteboard:stroke', ({ roomId: incomingRoomId, stroke }) => {
@@ -264,7 +270,7 @@ export default function RoomPage() {
     if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages, chatOpen])
 
-  const createClientId = () => crypto.randomUUID()
+  const createClientId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10))
 
   const emitWithRetry = <TResult,>(event: 'whiteboard:stroke' | 'chat:message', payload: unknown, onResult: (result: TResult) => void, attempt = 0) => {
     const socket = socketRef.current
@@ -468,7 +474,12 @@ export default function RoomPage() {
     })
   }
 
-  const toggleChat = () => setChatOpen((open) => !open)
+  const toggleChat = () => {
+    const nextOpen = !chatOpen
+    chatOpenRef.current = nextOpen
+    setChatOpen(nextOpen)
+    if (nextOpen) setUnread(0)
+  }
 
   const visibleMembers = members.slice(0, 4)
   const hiddenMemberCount = Math.max(0, members.length - visibleMembers.length)
@@ -479,14 +490,14 @@ export default function RoomPage() {
     'flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-[color:var(--text)] transition-colors hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]'
 
   return (
-    <div style={theme} className="flex h-screen flex-col overflow-hidden bg-[var(--bg)] text-[color:var(--text)]">
-      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[color:var(--border)] bg-[var(--surface)] px-4">
+    <div style={theme} className="flex h-screen flex-col overflow-hidden bg-(--bg) text-(--text)">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-(--border) bg-(--surface) px-4">
         <div className="flex min-w-0 items-center gap-3">
           <h1 className="truncate text-[15px] font-semibold">
-            Team room <span className="font-mono font-normal text-[color:var(--muted)]">{roomLabel}</span>
+            Team room <span className="font-mono font-normal text-(--muted)">{roomLabel}</span>
           </h1>
-          <span className="flex items-center gap-1.5 text-xs text-[color:var(--muted)]" role="status">
-            <span className={`h-2 w-2 rounded-full ${status === 'connected' ? 'bg-[var(--accent)]' : status === 'error' ? 'bg-[var(--danger)]' : 'animate-pulse bg-amber-400'}`} />
+          <span className="flex items-center gap-1.5 text-xs text-(--muted)" role="status">
+            <span className={`h-2 w-2 rounded-full ${status === 'connected' ? 'bg-(--accent)' : status === 'error' ? 'bg-(--danger)' : 'animate-pulse bg-amber-400'}`} />
             {status === 'connected' ? 'Live' : status === 'error' ? 'Disconnected' : 'Connecting'}
           </span>
         </div>
@@ -498,23 +509,23 @@ export default function RoomPage() {
               onClick={() => setPeopleOpen((open) => !open)}
               aria-expanded={peopleOpen}
               aria-label={`People in this room (${members.length})`}
-              className="flex h-9 items-center rounded-lg px-2 transition-colors hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
+              className="flex h-9 items-center rounded-lg px-2 transition-colors hover:bg-(--surface-2) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent)"
             >
               <span className="flex -space-x-2">
                 {visibleMembers.map((member) => (
-                  <span key={member.userId} className="rounded-full ring-2 ring-[color:var(--surface)]">
+                  <span key={member.userId} className="rounded-full ring-2 ring-(--surface)">
                     <Avatar name={member.user.displayName} online={onlineIds.has(member.userId)} />
                   </span>
                 ))}
               </span>
-              {hiddenMemberCount > 0 && <span className="ml-2 text-xs text-[color:var(--muted)]">+{hiddenMemberCount}</span>}
+              {hiddenMemberCount > 0 && <span className="ml-2 text-xs text-(--muted)">+{hiddenMemberCount}</span>}
             </button>
 
             {peopleOpen && (
-              <div className="absolute right-0 top-full z-30 mt-2 w-80 rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
-                <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
+              <div className="absolute right-0 top-full z-30 mt-2 w-80 rounded-xl border border-(--border) bg-(--surface) shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+                <div className="flex items-center justify-between border-b border-(--border) px-4 py-3">
                   <h2 className="text-sm font-semibold">People</h2>
-                  <span className="text-xs text-[color:var(--muted)]">{onlineIds.size} online</span>
+                  <span className="text-xs text-(--muted)">{onlineIds.size} online</span>
                 </div>
                 <ul className="max-h-80 overflow-y-auto p-2">
                   {members.map((member) => (
@@ -523,22 +534,22 @@ export default function RoomPage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
                           {member.user.displayName}
-                          {member.userId === currentUserId && <span className="ml-1.5 font-normal text-[color:var(--muted)]">(you)</span>}
+                          {member.userId === currentUserId && <span className="ml-1.5 font-normal text-(--muted)">(you)</span>}
                         </p>
-                        <p className="truncate text-xs text-[color:var(--muted)]">{member.user.email}</p>
+                        <p className="truncate text-xs text-(--muted)">{member.user.email}</p>
                       </div>
                       {isOwner && member.role !== 'owner' ? (
                         <select
                           value={member.role}
                           aria-label={`Role for ${member.user.displayName}`}
                           onChange={(event) => confirmRoleChange(member, event.target.value as Exclude<RoomRole, 'owner'>)}
-                          className="h-8 rounded-md border border-[color:var(--border)] bg-[var(--surface-2)] px-2 text-xs text-[color:var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
+                          className="h-8 rounded-md border border-(--border) bg-(--surface-2) px-2 text-xs text-(--text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent)"
                         >
                           <option value="viewer">Viewer</option>
                           <option value="editor">Editor</option>
                         </select>
                       ) : (
-                        <span className="text-xs text-[color:var(--muted)]">{roleLabel(member.role)}</span>
+                        <span className="text-xs text-(--muted)">{roleLabel(member.role)}</span>
                       )}
                     </li>
                   ))}
@@ -550,17 +561,17 @@ export default function RoomPage() {
           <button
             type="button"
             onClick={() => setShareOpen(true)}
-            className="flex h-9 items-center gap-2 rounded-lg bg-[var(--accent)] px-3.5 text-sm font-semibold text-[color:var(--accent-ink)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="flex h-9 items-center gap-2 rounded-lg bg-(--accent) px-3.5 text-sm font-semibold text-(--accent-ink) transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <UserPlus size={16} strokeWidth={2} />
             Share
           </button>
 
-          <button type="button" onClick={toggleChat} aria-pressed={chatOpen} aria-label="Chat" className={`${ghostButton} relative ${chatOpen ? 'bg-[var(--surface-2)]' : ''}`}>
+          <button type="button" onClick={toggleChat} aria-pressed={chatOpen} aria-label="Chat" className={`${ghostButton} relative ${chatOpen ? 'bg-(--surface-2)' : ''}`}>
             <MessageSquare size={16} strokeWidth={1.75} />
             <span className="hidden sm:inline">Chat</span>
             {unread > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-semibold text-[color:var(--accent-ink)]">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-(--accent) px-1 text-[10px] font-semibold text-(--accent-ink)">
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
@@ -610,17 +621,17 @@ export default function RoomPage() {
         </div>
 
         {chatOpen && (
-          <aside className="flex w-[340px] shrink-0 flex-col border-l border-[color:var(--border)] bg-[var(--surface)] max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30 max-md:w-full max-md:max-w-sm">
-            <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border)] pl-4 pr-2">
+          <aside className="flex w-[340px] shrink-0 flex-col border-l border-(--border) bg-(--surface) max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30 max-md:w-full max-md:max-w-sm">
+            <div className="flex h-12 shrink-0 items-center justify-between border-b border-(--border) pl-4 pr-2">
               <h2 className="text-sm font-semibold">Chat</h2>
-              <button type="button" aria-label="Close chat" onClick={toggleChat} className="rounded-md p-2 text-[color:var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[color:var(--text)]">
+              <button type="button" aria-label="Close chat" onClick={toggleChat} className="rounded-md p-2 text-(--muted) transition-colors hover:bg-(--surface-2) hover:text-(--text)">
                 <X size={16} />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-4">
               {chatMessages.length === 0 ? (
-                <p className="mt-8 text-center text-sm text-[color:var(--muted)]">No messages yet. Anything you send here shows up for everyone in the room.</p>
+                <p className="mt-8 text-center text-sm text-(--muted)">No messages yet. Anything you send here shows up for everyone in the room.</p>
               ) : (
                 <ul className="space-y-4">
                   {chatMessages.map((message) => (
@@ -629,9 +640,9 @@ export default function RoomPage() {
                       <div className="min-w-0 flex-1">
                         <p className="flex items-baseline gap-2">
                           <span className="text-sm font-medium">{message.displayName}</span>
-                          <span className="text-xs text-[color:var(--muted)]">{new Date(message.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                          <span className="text-xs text-(--muted)">{new Date(message.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
                         </p>
-                        <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>
+                        <p className="mt-0.5 whitespace-pre-wrap wrap-break-word text-sm leading-relaxed">{message.content}</p>
                       </div>
                     </li>
                   ))}
@@ -640,7 +651,7 @@ export default function RoomPage() {
               <div ref={chatEndRef} />
             </div>
 
-            <div className="shrink-0 border-t border-[color:var(--border)] p-3">
+            <div className="shrink-0 border-t border-(--border) p-3">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -654,14 +665,14 @@ export default function RoomPage() {
                   }}
                   placeholder="Message the room"
                   aria-label="Message"
-                  className="h-9 min-w-0 flex-1 rounded-lg border border-[color:var(--border)] bg-[var(--bg)] px-3 text-sm text-[color:var(--text)] placeholder:text-[color:var(--muted)] focus:border-[color:var(--accent)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)]"
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-(--border) bg-(--bg) px-3 text-sm text-(--text) placeholder:text-(--muted) focus:border-(--accent) focus:outline-none focus:ring-2 focus:ring-(--accent)"
                 />
                 <button
                   type="button"
                   onClick={handleSendMessage}
                   disabled={!chatInput.trim()}
                   aria-label="Send message"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-[color:var(--accent-ink)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-(--accent) text-(--accent-ink) transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <SendHorizontal size={16} strokeWidth={2} />
                 </button>
@@ -678,31 +689,31 @@ export default function RoomPage() {
             if (event.target === event.currentTarget) setShareOpen(false)
           }}
         >
-          <div role="dialog" aria-modal="true" aria-labelledby="share-title" className="w-full max-w-md rounded-xl border border-[color:var(--border)] bg-[var(--surface)] shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
+          <div role="dialog" aria-modal="true" aria-labelledby="share-title" className="w-full max-w-md rounded-xl border border-(--border) bg-(--surface) shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
             <div className="flex items-start justify-between gap-4 px-5 pt-5">
               <div>
                 <h2 id="share-title" className="text-base font-semibold">Share this room</h2>
-                <p className="mt-1 text-sm text-[color:var(--muted)]">People with this code can join the room.</p>
+                <p className="mt-1 text-sm text-(--muted)">People with this code can join the room.</p>
               </div>
-              <button type="button" aria-label="Close" onClick={() => setShareOpen(false)} className="-mr-1 rounded-md p-1.5 text-[color:var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[color:var(--text)]">
+              <button type="button" aria-label="Close" onClick={() => setShareOpen(false)} className="-mr-1 rounded-md p-1.5 text-(--muted) transition-colors hover:bg-(--surface-2) hover:text-(--text)">
                 <X size={18} />
               </button>
             </div>
 
             <div className="px-5 pt-4">
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--border)] bg-[var(--bg)] py-2.5 pl-4 pr-2.5">
-                <span className={`font-mono text-xl tracking-wider ${inviteRevoked ? 'text-[color:var(--muted)] line-through' : ''}`}>{roomInfo ? roomInfo.inviteCode : '--------'}</span>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-(--border) bg-(--bg) py-2.5 pl-4 pr-2.5">
+                <span className={`font-mono text-xl tracking-wider ${inviteRevoked ? 'text-(--muted) line-through' : ''}`}>{roomInfo ? roomInfo.inviteCode : '--------'}</span>
                 <button
                   type="button"
                   onClick={handleCopyInviteCode}
                   disabled={!roomInfo || inviteRevoked}
-                  className="flex h-8 items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 text-sm font-semibold text-[color:var(--accent-ink)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex h-8 items-center gap-1.5 rounded-md bg-(--accent) px-3 text-sm font-semibold text-(--accent-ink) transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {copiedCode ? <Check size={14} strokeWidth={2.5} /> : <Copy size={14} strokeWidth={2} />}
                   {copiedCode ? 'Copied' : 'Copy code'}
                 </button>
               </div>
-              <p className={`mt-2 text-xs ${inviteRevoked ? 'text-[color:var(--danger)]' : 'text-[color:var(--muted)]'}`}>
+              <p className={`mt-2 text-xs ${inviteRevoked ? 'text-(--danger)' : 'text-(--muted)'}`}>
                 {inviteRevoked
                   ? 'This code is revoked and can no longer be used to join.'
                   : roomInfo?.inviteExpiresAt
@@ -712,18 +723,18 @@ export default function RoomPage() {
             </div>
 
             {isOwner ? (
-              <div className="mt-5 space-y-4 border-t border-[color:var(--border)] px-5 py-4">
+              <div className="mt-5 space-y-4 border-t border-(--border) px-5 py-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-medium">Code expiry</p>
-                    <p className="text-xs text-[color:var(--muted)]">Applies to new members only.</p>
+                    <p className="text-xs text-(--muted)">Applies to new members only.</p>
                   </div>
-                  <div className="flex rounded-lg border border-[color:var(--border)] bg-[var(--bg)] p-0.5" role="group" aria-label="Code expiry">
+                  <div className="flex rounded-lg border border-(--border) bg-(--bg) p-0.5" role="group" aria-label="Code expiry">
                     <button
                       type="button"
                       aria-pressed={inviteHasExpiry}
                       onClick={() => setConfirmation({ title: 'Set a 24-hour invite expiry?', description: 'New members can use this code for the next 24 hours only.', confirmLabel: 'Set expiry', action: () => handleInviteExpiry(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()) })}
-                      className={`h-7 rounded-md px-3 text-xs font-medium transition-colors ${inviteHasExpiry ? 'bg-[var(--surface-2)] text-[color:var(--text)]' : 'text-[color:var(--muted)] hover:text-[color:var(--text)]'}`}
+                      className={`h-7 rounded-md px-3 text-xs font-medium transition-colors ${inviteHasExpiry ? 'bg-(--surface-2) text-(--text)' : 'text-(--muted) hover:text-(--text)'}`}
                     >
                       24 hours
                     </button>
@@ -731,7 +742,7 @@ export default function RoomPage() {
                       type="button"
                       aria-pressed={!inviteHasExpiry}
                       onClick={() => setConfirmation({ title: 'Remove invite expiry?', description: 'The current invite code will remain active until you revoke or rotate it.', confirmLabel: 'Remove expiry', action: () => handleInviteExpiry(null) })}
-                      className={`h-7 rounded-md px-3 text-xs font-medium transition-colors ${!inviteHasExpiry ? 'bg-[var(--surface-2)] text-[color:var(--text)]' : 'text-[color:var(--muted)] hover:text-[color:var(--text)]'}`}
+                      className={`h-7 rounded-md px-3 text-xs font-medium transition-colors ${!inviteHasExpiry ? 'bg-(--surface-2) text-(--text)' : 'text-(--muted) hover:text-(--text)'}`}
                     >
                       No expiry
                     </button>
@@ -741,26 +752,26 @@ export default function RoomPage() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-medium">Replace the code</p>
-                    <p className="text-xs text-[color:var(--muted)]">The old code stops working. Members keep access.</p>
+                    <p className="text-xs text-(--muted)">The old code stops working. Members keep access.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setConfirmation({ title: 'Rotate the invite code?', description: 'The current code will immediately stop admitting new members. Existing members keep access.', confirmLabel: 'Rotate code', action: handleRotateInvite })}
-                    className="h-8 shrink-0 rounded-md border border-[color:var(--border)] px-3 text-sm font-medium transition-colors hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
+                    className="h-8 shrink-0 rounded-md border border-(--border) px-3 text-sm font-medium transition-colors hover:bg-(--surface-2) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent)"
                   >
                     Rotate code
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 border-t border-[color:var(--border)] pt-4">
+                <div className="flex items-center justify-between gap-4 border-t border-(--border) pt-4">
                   <div>
                     <p className="text-sm font-medium">Revoke invite</p>
-                    <p className="text-xs text-[color:var(--muted)]">No one new can join with this code.</p>
+                    <p className="text-xs text-(--muted)">No one new can join with this code.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setConfirmation({ title: 'Revoke this invite code?', description: 'No new user can join with this code. Existing members will keep access.', confirmLabel: 'Revoke invite', tone: 'danger', action: handleRevokeInvite })}
-                    className="h-8 shrink-0 rounded-md border border-red-400/40 px-3 text-sm font-medium text-[color:var(--danger)] transition-colors hover:bg-red-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                    className="h-8 shrink-0 rounded-md border border-red-400/40 px-3 text-sm font-medium text-(--danger) transition-colors hover:bg-red-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
                   >
                     Revoke invite
                   </button>
