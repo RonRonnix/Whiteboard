@@ -1,17 +1,47 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { Circle, Eraser, Eye, Minus, Pencil, Plus, Redo2, Slash, Square, Undo2 } from 'lucide-react'
 import type { NewStroke, Point, WhiteboardStroke, WhiteboardTool } from '../types/realtime'
 
-const COLORS = ['#f97316', '#ef4444', '#fde047', '#34d399', '#22d3ee', '#a855f7', '#cbd5f5']
+const COLORS = ['#f1f5f9', '#fb923c', '#f87171', '#facc15', '#4ade80', '#22d3ee', '#818cf8', '#e879f9']
 const BOARD_WIDTH = 2400
 const BOARD_HEIGHT = 1600
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2
+
+// The page behind the board uses --workspace (set in RoomPage). These two are drawn on the canvas itself.
+const BOARD = { surface: '#161a21', dot: '#2c313c', edge: '#2c313c' }
+
+const TOOLS: { id: WhiteboardTool; label: string; key: string; Icon: typeof Pencil }[] = [
+  { id: 'pen', label: 'Pen', key: 'P', Icon: Pencil },
+  { id: 'eraser', label: 'Eraser', key: 'E', Icon: Eraser },
+  { id: 'line', label: 'Line', key: 'L', Icon: Slash },
+  { id: 'rectangle', label: 'Rectangle', key: 'R', Icon: Square },
+  { id: 'ellipse', label: 'Ellipse', key: 'O', Icon: Circle },
+]
 
 function createClientId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
   }
   return Math.random().toString(36).slice(2, 10)
+}
+
+let gridTile: HTMLCanvasElement | null = null
+function getGridTile() {
+  if (gridTile) return gridTile
+  // 160px tile that represents 40 board units, so the dots stay sharp up to 2x zoom on hi-dpi screens.
+  const tile = document.createElement('canvas')
+  tile.width = 160
+  tile.height = 160
+  const tctx = tile.getContext('2d')
+  if (tctx) {
+    tctx.fillStyle = BOARD.dot
+    tctx.beginPath()
+    tctx.arc(80, 80, 5, 0, Math.PI * 2)
+    tctx.fill()
+  }
+  gridTile = tile
+  return tile
 }
 
 function drawStroke(ctx: CanvasRenderingContext2D, stroke: { points: Point[]; color: string; size: number; tool?: WhiteboardTool }) {
@@ -53,19 +83,72 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: { points: Point[]; co
   ctx.restore()
 }
 
+type IconButtonProps = {
+  label: string
+  shortcut?: string
+  active?: boolean
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}
+
+function IconButton({ label, shortcut, active, disabled, onClick, children }: IconButtonProps) {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        disabled={disabled}
+        onClick={onClick}
+        className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] disabled:cursor-not-allowed disabled:opacity-35 ${
+          active
+            ? 'bg-[var(--accent)] text-[color:var(--accent-ink)]'
+            : 'text-[color:var(--muted)] hover:bg-[var(--surface-2)] hover:text-[color:var(--text)] disabled:hover:bg-transparent'
+        }`}
+      >
+        {children}
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-md border border-[color:var(--border)] bg-[var(--surface-2)] px-2 py-1 text-xs text-[color:var(--text)] opacity-0 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {label}
+        {shortcut && <kbd className="rounded bg-[var(--bg)] px-1.5 py-0.5 font-sans text-[11px] text-[color:var(--muted)]">{shortcut}</kbd>}
+      </span>
+    </div>
+  )
+}
+
 type WhiteboardCanvasProps = {
   strokes: WhiteboardStroke[]
   onStrokeComplete: (stroke: NewStroke) => void
   onStrokePreview: (stroke: NewStroke) => void
+  onUndo?: () => void
+  onRedo?: () => void
+  canUndo?: boolean
+  canRedo?: boolean
   disabled?: boolean
   canDraw?: boolean
   className?: string
 }
 
-export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePreview, disabled = false, canDraw = true, className }: WhiteboardCanvasProps) {
+export default function WhiteboardCanvas({
+  strokes,
+  onStrokeComplete,
+  onStrokePreview,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
+  disabled = false,
+  canDraw = true,
+  className,
+}: WhiteboardCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const layerRef = useRef<HTMLCanvasElement | null>(null)
   const [color, setColor] = useState(COLORS[0])
   const [brushSize, setBrushSize] = useState(4)
   const [tool, setTool] = useState<WhiteboardTool>('pen')
@@ -74,6 +157,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
   const [cameraOffset, setCameraOffset] = useState({ x: 0, y: 0 })
   const zoomRef = useRef(1)
   const cameraOffsetRef = useRef({ x: 0, y: 0 })
+  const didCenterRef = useRef(false)
   const panRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
   const drawingRef = useRef(false)
   const liveStrokeRef = useRef<NewStroke | null>(null)
@@ -101,59 +185,143 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
     const ctx = ctxRef.current
     if (!canvas || !ctx) return
     const dpr = devicePixelRatioRef.current
+
+    // Strokes are drawn on their own layer first so the eraser only removes ink, never the board or its grid.
+    const layer = layerRef.current ?? (layerRef.current = document.createElement('canvas'))
+    if (layer.width !== canvas.width || layer.height !== canvas.height) {
+      layer.width = canvas.width
+      layer.height = canvas.height
+    }
+    const layerCtx = layer.getContext('2d')
+    if (!layerCtx) return
+    layerCtx.setTransform(1, 0, 0, 1, 0, 0)
+    layerCtx.clearRect(0, 0, layer.width, layer.height)
+    layerCtx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * cameraOffset.x, dpr * cameraOffset.y)
+    strokes.forEach((stroke) => drawStroke(layerCtx, stroke))
+    if (liveStrokeRef.current) drawStroke(layerCtx, liveStrokeRef.current)
+
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * cameraOffset.x, dpr * cameraOffset.y)
-    ctx.fillStyle = '#061a26'
+    ctx.fillStyle = BOARD.surface
     ctx.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT)
-    ctx.strokeStyle = '#176b87'
-    ctx.lineWidth = 2 / zoom
-    ctx.strokeRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT)
-    strokes.forEach((stroke) => drawStroke(ctx, stroke))
-    if (liveStrokeRef.current) {
-      drawStroke(ctx, liveStrokeRef.current)
+    const grid = ctx.createPattern(getGridTile(), 'repeat')
+    if (grid) {
+      grid.setTransform(new DOMMatrix().scale(0.25))
+      ctx.fillStyle = grid
+      ctx.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT)
     }
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(0, 0, BOARD_WIDTH, BOARD_HEIGHT)
+    ctx.clip()
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.drawImage(layer, 0, 0)
+    ctx.restore()
+    ctx.strokeStyle = BOARD.edge
+    ctx.lineWidth = 1 / zoom
+    ctx.strokeRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT)
   }, [strokes, zoom, cameraOffset])
+
+  const redrawRef = useRef(redraw)
+  useEffect(() => {
+    redrawRef.current = redraw
+  }, [redraw])
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const host = canvasHostRef.current
+    if (!canvas || !host) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctxRef.current = ctx
 
     const resize = () => {
-      if (!canvas || !ctxRef.current) return
-      const host = canvasHostRef.current
-      if (!host) return
       const rect = host.getBoundingClientRect()
       const dpr = window.devicePixelRatio || 1
       devicePixelRatioRef.current = dpr
       canvas.width = rect.width * dpr
       canvas.height = rect.height * dpr
-      const nextOffset = clampCameraOffset(cameraOffsetRef.current, zoomRef.current)
+      const base = didCenterRef.current
+        ? cameraOffsetRef.current
+        : { x: (rect.width - BOARD_WIDTH * zoomRef.current) / 2, y: (rect.height - BOARD_HEIGHT * zoomRef.current) / 2 }
+      if (rect.width > 0) didCenterRef.current = true
+      const nextOffset = clampCameraOffset(base, zoomRef.current)
       cameraOffsetRef.current = nextOffset
       setCameraOffset(nextOffset)
-      redraw()
+      redrawRef.current()
     }
 
     resize()
-
-    const host = canvasHostRef.current
-    if (!host) return
     const observer = new ResizeObserver(() => resize())
     observer.observe(host)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [redraw, clampCameraOffset])
+    return () => observer.disconnect()
+  }, [clampCameraOffset])
 
   useEffect(() => {
     redraw()
   }, [redraw])
 
-  const getPointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>): Point | null => {
+  const applyZoom = useCallback(
+    (requested: number, anchor?: { x: number; y: number }) => {
+      const host = canvasHostRef.current
+      if (!host) return
+      const rect = host.getBoundingClientRect()
+      const anchorX = anchor?.x ?? rect.width / 2
+      const anchorY = anchor?.y ?? rect.height / 2
+      const currentZoom = zoomRef.current
+      const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(requested.toFixed(1))))
+      if (nextZoom === currentZoom) return
+      const currentOffset = cameraOffsetRef.current
+      const worldX = (anchorX - currentOffset.x) / currentZoom
+      const worldY = (anchorY - currentOffset.y) / currentZoom
+      const nextOffset = clampCameraOffset({ x: anchorX - worldX * nextZoom, y: anchorY - worldY * nextZoom }, nextZoom)
+      zoomRef.current = nextZoom
+      cameraOffsetRef.current = nextOffset
+      setZoom(nextZoom)
+      setCameraOffset(nextOffset)
+    },
+    [clampCameraOffset],
+  )
+
+  const resetView = () => {
+    const host = canvasHostRef.current
+    if (!host) return
+    const rect = host.getBoundingClientRect()
+    const nextOffset = clampCameraOffset({ x: (rect.width - BOARD_WIDTH) / 2, y: (rect.height - BOARD_HEIGHT) / 2 }, 1)
+    zoomRef.current = 1
+    cameraOffsetRef.current = nextOffset
+    setZoom(1)
+    setCameraOffset(nextOffset)
+  }
+
+  // Native listener: React attaches wheel handlers as passive, which makes preventDefault() a no-op.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      const rect = canvas.getBoundingClientRect()
+      applyZoom(zoomRef.current + (event.deltaY < 0 ? 0.1 : -0.1), { x: event.clientX - rect.left, y: event.clientY - rect.top })
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [applyZoom])
+
+  useEffect(() => {
+    if (!canDraw) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) return
+      const match = TOOLS.find((item) => item.key.toLowerCase() === event.key.toLowerCase())
+      if (match) setTool(match.id)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [canDraw])
+
+  const getPointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>): Point | null => {
     const canvas = canvasRef.current
     if (!canvas) return null
     const rect = canvas.getBoundingClientRect()
@@ -163,7 +331,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
     }
   }
 
-  const getCursorPosition = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const getCursorPosition = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const host = canvasHostRef.current
     if (!host) return null
     const rect = host.getBoundingClientRect()
@@ -173,9 +341,10 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
     }
   }
 
-  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     event.preventDefault()
-    if (event.button === 2) {
+    // Right-drag pans for everyone; viewers can also pan with a normal drag since they can't draw.
+    if (event.button === 2 || (event.button === 0 && !canDraw)) {
       panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
       setCursor((current) => ({ ...current, visible: false }))
       event.currentTarget.setPointerCapture(event.pointerId)
@@ -191,9 +360,8 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
     event.currentTarget.setPointerCapture(event.pointerId)
     drawingRef.current = true
     lastPreviewAtRef.current = 0
-    const clientId = createClientId()
     liveStrokeRef.current = {
-      clientId,
+      clientId: createClientId(),
       points: [point],
       color,
       size: brushSize,
@@ -201,14 +369,17 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
     }
   }
 
-  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const pan = panRef.current
     if (pan?.pointerId === event.pointerId) {
       event.preventDefault()
-      const nextOffset = clampCameraOffset({
-        x: cameraOffsetRef.current.x + event.clientX - pan.x,
-        y: cameraOffsetRef.current.y + event.clientY - pan.y,
-      }, zoomRef.current)
+      const nextOffset = clampCameraOffset(
+        {
+          x: cameraOffsetRef.current.x + event.clientX - pan.x,
+          y: cameraOffsetRef.current.y + event.clientY - pan.y,
+        },
+        zoomRef.current,
+      )
       panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
       cameraOffsetRef.current = nextOffset
       setCameraOffset(nextOffset)
@@ -237,7 +408,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
     redraw()
   }
 
-  const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (panRef.current?.pointerId === event.pointerId) {
       panRef.current = null
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
@@ -249,7 +420,7 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
     commitStroke()
   }
 
-  const handlePointerCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerCancel = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (panRef.current?.pointerId === event.pointerId) {
       panRef.current = null
       return
@@ -261,94 +432,21 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
 
   const hideCursor = () => setCursor((current) => ({ ...current, visible: false }))
 
-  const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
-    event.preventDefault()
-    const rect = event.currentTarget.getBoundingClientRect()
-    const pointerX = event.clientX - rect.left
-    const pointerY = event.clientY - rect.top
-    const currentZoom = zoomRef.current
-    const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number((currentZoom + (event.deltaY < 0 ? 0.1 : -0.1)).toFixed(1))))
-    if (nextZoom === currentZoom) return
-    const currentOffset = cameraOffsetRef.current
-    const worldX = (pointerX - currentOffset.x) / currentZoom
-    const worldY = (pointerY - currentOffset.y) / currentZoom
-    const nextOffset = clampCameraOffset({
-      x: pointerX - worldX * nextZoom,
-      y: pointerY - worldY * nextZoom,
-    }, nextZoom)
-    zoomRef.current = nextZoom
-    cameraOffsetRef.current = nextOffset
-    setZoom(nextZoom)
-    setCameraOffset(nextOffset)
-  }
+  const isEraser = tool === 'eraser'
+  const previewSize = Math.max(6, Math.min(brushSize, 22))
 
   return (
-    <div className={`relative flex h-[500px] min-h-0 flex-col overflow-hidden rounded-2xl border border-cyan-950/80 bg-gradient-to-br from-sky-950 via-[#061a26] to-emerald-950/70 shadow-inner shadow-cyan-950/50 ${className ?? ''}`}>
-      <div className="flex flex-wrap items-center gap-3 border-b border-cyan-900/60 bg-slate-950/25 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setTool('pen')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'pen' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
-            Pen
-          </button>
-          <button type="button" onClick={() => setTool('eraser')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'eraser' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
-            Eraser
-          </button>
-          <button type="button" onClick={() => setTool('line')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'line' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
-            Line
-          </button>
-          <button type="button" onClick={() => setTool('rectangle')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'rectangle' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
-            Rectangle
-          </button>
-          <button type="button" onClick={() => setTool('ellipse')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${tool === 'ellipse' ? 'border-cyan-300 bg-cyan-400/15 text-cyan-50 shadow-sm shadow-cyan-500/20' : 'border-cyan-950 text-slate-300 hover:border-cyan-700'}`}>
-            Ellipse
-          </button>
-        </div>
-        {tool !== 'eraser' && <div className="flex items-center gap-2">
-          {COLORS.map((swatch) => (
-            <button
-              key={swatch}
-              type="button"
-              onClick={() => setColor(swatch)}
-              className={`h-6 w-6 rounded-full border ${color === swatch ? 'border-white' : 'border-white/30'}`}
-              style={{ backgroundColor: swatch }}
-            />
-          ))}
-          <input type="color" value={color} onChange={(event) => setColor(event.target.value)} aria-label="Custom stroke color" className="h-7 w-7 cursor-pointer rounded-full border border-white/30 bg-transparent p-0" />
-        </div>}
-        <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-400">
-          <span>{tool === 'eraser' ? 'Eraser' : 'Brush'}</span>
-          <input
-            type="range"
-            min={2}
-            max={48}
-            step={1}
-            value={brushSize}
-            onChange={(event) => setBrushSize(Number(event.target.value))}
-            className="w-32 accent-emerald-400"
-          />
-          <span className="flex min-w-16 items-center gap-2 text-slate-300">
-            <span
-              aria-hidden="true"
-              className={`inline-block rounded-full border ${tool === 'eraser' ? 'border-slate-100 bg-slate-100/15' : 'border-current bg-current/20'}`}
-              style={{ width: Math.max(6, Math.min(brushSize, 24)), height: Math.max(6, Math.min(brushSize, 24)), color }}
-            />
-            <span className="tabular-nums">{brushSize}px</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-400">
-          <span>Zoom</span>
-          <span className="text-slate-300">{Math.round(zoom * 100)}%</span>
-          <span className="normal-case tracking-normal text-slate-500">Scroll to zoom · right-drag to pan</span>
-        </div>
-      </div>
-      <div ref={canvasHostRef} className="relative min-h-0 flex-1 overflow-hidden">
+    <div className={`relative h-full w-full overflow-hidden bg-[var(--workspace)] ${className ?? ''}`}>
+      <div ref={canvasHostRef} className="absolute inset-0">
         <canvas
           ref={canvasRef}
-          className={`absolute inset-0 block h-full w-full touch-none ${disabled ? 'cursor-not-allowed opacity-60' : canDraw ? 'cursor-none' : 'cursor-grab'}`}
+          className={`absolute inset-0 block h-full w-full touch-none focus:outline-none ${
+            disabled ? 'cursor-not-allowed opacity-60' : canDraw ? 'cursor-none' : 'cursor-grab active:cursor-grabbing'
+          }`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
-          onWheel={handleWheel}
           onContextMenu={(event) => event.preventDefault()}
           onPointerLeave={hideCursor}
           onPointerEnter={(event) => {
@@ -356,21 +454,126 @@ export default function WhiteboardCanvas({ strokes, onStrokeComplete, onStrokePr
             if (cursorPosition) setCursor({ ...cursorPosition, visible: true })
           }}
           tabIndex={0}
+          aria-label="Shared whiteboard"
         />
         {!disabled && canDraw && cursor.visible && (
           <div
             aria-hidden="true"
-            className={`pointer-events-none absolute rounded-full ${tool === 'eraser' ? 'border border-slate-100 bg-slate-100/15' : 'border border-white/90 bg-white/10'}`}
+            className={`pointer-events-none absolute rounded-full border ${isEraser ? 'border-slate-100 bg-slate-100/15' : 'border-white/90 bg-white/10'}`}
             style={{
               width: brushSize * zoom,
               height: brushSize * zoom,
               left: cursor.x,
               top: cursor.y,
               transform: 'translate(-50%, -50%)',
-              boxShadow: tool === 'eraser' ? '0 0 0 1px rgba(15, 23, 42, 0.8)' : `0 0 0 1px ${color}`,
+              boxShadow: isEraser ? '0 0 0 1px rgba(15, 23, 42, 0.8)' : `0 0 0 1px ${color}`,
             }}
           />
         )}
+      </div>
+
+      {canDraw && strokes.length === 0 && (
+        <p className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm text-[color:var(--muted)]">
+          The board is empty. Pick a tool and start drawing.
+        </p>
+      )}
+
+      {canDraw ? (
+        <>
+          <div className="absolute left-4 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1 rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+            {TOOLS.map(({ id, label, key, Icon }) => (
+              <IconButton key={id} label={label} shortcut={key} active={tool === id} onClick={() => setTool(id)}>
+                <Icon size={18} strokeWidth={1.75} />
+              </IconButton>
+            ))}
+            <div className="my-1 h-px bg-[var(--border)]" />
+            <IconButton label="Undo" shortcut="Ctrl+Z" disabled={!canUndo} onClick={() => onUndo?.()}>
+              <Undo2 size={18} strokeWidth={1.75} />
+            </IconButton>
+            <IconButton label="Redo" shortcut="Ctrl+Shift+Z" disabled={!canRedo} onClick={() => onRedo?.()}>
+              <Redo2 size={18} strokeWidth={1.75} />
+            </IconButton>
+          </div>
+
+          <div className="absolute bottom-4 left-1/2 z-10 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-4 overflow-x-auto rounded-xl border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+            <div className={`flex items-center gap-1.5 transition-opacity ${isEraser ? 'pointer-events-none opacity-35' : ''}`} role="group" aria-label="Stroke color">
+              {COLORS.map((swatch) => (
+                <button
+                  key={swatch}
+                  type="button"
+                  aria-label={`Color ${swatch}`}
+                  aria-pressed={color === swatch}
+                  onClick={() => setColor(swatch)}
+                  className={`h-6 w-6 shrink-0 rounded-full ring-offset-2 ring-offset-[#151920] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] ${
+                    color === swatch ? 'ring-2 ring-white' : 'hover:scale-110'
+                  }`}
+                  style={{ backgroundColor: swatch }}
+                />
+              ))}
+              <label
+                className="relative h-6 w-6 shrink-0 cursor-pointer rounded-full transition hover:scale-110 focus-within:ring-2 focus-within:ring-[color:var(--accent)]"
+                style={{ background: 'conic-gradient(#f87171, #facc15, #4ade80, #22d3ee, #818cf8, #e879f9, #f87171)' }}
+                title="Custom color"
+              >
+                <input type="color" value={color} onChange={(event) => setColor(event.target.value)} aria-label="Custom stroke color" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+              </label>
+            </div>
+            <div className="h-6 w-px shrink-0 bg-[var(--border)]" />
+            <div className="flex shrink-0 items-center gap-3">
+              <span className="flex h-6 w-6 items-center justify-center" aria-hidden="true">
+                <span
+                  className={`rounded-full ${isEraser ? 'border border-slate-200 bg-slate-200/15' : ''}`}
+                  style={{ width: previewSize, height: previewSize, backgroundColor: isEraser ? undefined : color }}
+                />
+              </span>
+              <input
+                type="range"
+                min={2}
+                max={48}
+                step={1}
+                value={brushSize}
+                onChange={(event) => setBrushSize(Number(event.target.value))}
+                aria-label={isEraser ? 'Eraser size' : 'Brush size'}
+                className="w-28 accent-[var(--accent)]"
+              />
+              <span className="w-9 text-right text-xs tabular-nums text-[color:var(--muted)]">{brushSize}px</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[color:var(--muted)] shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+          <Eye size={16} strokeWidth={1.75} />
+          View only. Ask the owner for edit access.
+        </div>
+      )}
+
+      <div className="absolute bottom-4 right-4 z-10 flex items-center rounded-xl border border-[color:var(--border)] bg-[var(--surface)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+        <button
+          type="button"
+          aria-label="Zoom out"
+          onClick={() => applyZoom(zoomRef.current - 0.1)}
+          disabled={zoom <= MIN_ZOOM}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[color:var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] disabled:opacity-35"
+        >
+          <Minus size={16} strokeWidth={1.75} />
+        </button>
+        <button
+          type="button"
+          onClick={resetView}
+          title="Reset to 100%"
+          className="h-8 min-w-14 rounded-lg px-2 text-xs tabular-nums text-[color:var(--text)] transition-colors hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          type="button"
+          aria-label="Zoom in"
+          onClick={() => applyZoom(zoomRef.current + 0.1)}
+          disabled={zoom >= MAX_ZOOM}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[color:var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] disabled:opacity-35"
+        >
+          <Plus size={16} strokeWidth={1.75} />
+        </button>
       </div>
     </div>
   )
